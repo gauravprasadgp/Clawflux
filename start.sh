@@ -11,4 +11,6 @@ docker run --name clawplane-redis \
   -p 6379:6379 \
   -d redis
 
+go run ./cmd/migrate
+
 go run cmd/api/main.go
