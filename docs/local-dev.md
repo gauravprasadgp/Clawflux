@@ -1,0 +1,49 @@
+# Local Development
+
+## Dependencies
+
+- Go 1.22+
+- Docker / Docker Compose
+- PostgreSQL 16
+- Redis 7
+
+## Start backing services
+
+```bash
+docker compose up -d postgres redis
+```
+
+## Environment
+
+```bash
+cp .env.example .env
+```
+
+## Apply schema
+
+```bash
+go run ./cmd/migrate
+```
+
+## Start API
+
+```bash
+go run ./cmd/api
+```
+
+## Start worker
+
+```bash
+go run ./cmd/worker
+```
+
+## Development auth
+
+When `DEVELOPMENT_AUTH=true`, requests without auth headers are treated as `developer@local`.
+
+You can also set:
+
+```text
+X-User-Email: alice@example.com
+X-User-Name: Alice
+```
