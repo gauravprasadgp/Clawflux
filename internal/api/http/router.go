@@ -50,16 +50,36 @@ func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, ap
 	return r.withRequestLogging(mux)
 }
 
+// handleHealth godoc
+// @Summary Liveness check
+// @Tags Health
+// @Produce json
+// @Success 200 {object} HealthStatusResponse
+// @Router /healthz [get]
 func (r *Router) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// handleProviders godoc
+// @Summary List supported auth providers
+// @Tags Auth
+// @Produce json
+// @Success 200 {object} AuthProvidersResponse
+// @Router /v1/auth/providers [get]
 func (r *Router) handleProviders(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"providers": []string{"medium"},
 	})
 }
 
+// handleMediumLogin godoc
+// @Summary Get Medium OAuth login URL
+// @Tags Auth
+// @Produce json
+// @Param redirect_uri query string false "Redirect URI"
+// @Success 200 {object} LoginURLResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /v1/auth/medium/login [get]
 func (r *Router) handleMediumLogin(w http.ResponseWriter, req *http.Request) {
 	redirectURI := req.URL.Query().Get("redirect_uri")
 	loginURL, err := r.auth.LoginURL(req.Context(), "medium", redirectURI)
@@ -70,6 +90,16 @@ func (r *Router) handleMediumLogin(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"url": loginURL})
 }
 
+// handleMediumCallback godoc
+// @Summary Handle Medium OAuth callback
+// @Tags Auth
+// @Produce json
+// @Param code query string false "OAuth callback code"
+// @Param redirect_uri query string false "Redirect URI"
+// @Success 200 {object} domain.Actor
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /v1/auth/medium/callback [get]
 func (r *Router) handleMediumCallback(w http.ResponseWriter, req *http.Request) {
 	redirectURI := req.URL.Query().Get("redirect_uri")
 	code := req.URL.Query().Get("code")

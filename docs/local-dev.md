@@ -31,6 +31,19 @@ go run ./cmd/migrate
 go run ./cmd/api
 ```
 
+Code-first Swagger generation:
+
+```bash
+go install github.com/swaggo/swag/cmd/swag@latest
+go generate ./cmd/api
+```
+
+Generated files will be written to:
+
+```text
+docs/swagger/
+```
+
 ## Start worker
 
 ```bash
