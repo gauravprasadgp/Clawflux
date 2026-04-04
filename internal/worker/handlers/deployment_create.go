@@ -12,14 +12,16 @@ type DeploymentCreateHandler struct {
 	deployments domain.DeploymentRepository
 	backend     domain.DeploymentBackend
 	service     *services.DeploymentService
+	scheduler   domain.Scheduler
 }
 
-func NewDeploymentCreateHandler(apps domain.AppRepository, deployments domain.DeploymentRepository, backend domain.DeploymentBackend, service *services.DeploymentService) *DeploymentCreateHandler {
+func NewDeploymentCreateHandler(apps domain.AppRepository, deployments domain.DeploymentRepository, backend domain.DeploymentBackend, service *services.DeploymentService, scheduler domain.Scheduler) *DeploymentCreateHandler {
 	return &DeploymentCreateHandler{
 		apps:        apps,
 		deployments: deployments,
 		backend:     backend,
 		service:     service,
+		scheduler:   scheduler,
 	}
 }
 
@@ -53,7 +55,12 @@ func (h *DeploymentCreateHandler) Handle(ctx context.Context, job domain.Job) er
 	}
 	if status.Status == domain.DeploymentStatusRunning {
 		app.CurrentDeploymentID = deployment.ID
-		return h.apps.Update(ctx, app)
+		if err := h.apps.Update(ctx, app); err != nil {
+			return err
+		}
+	}
+	if status.Status == domain.DeploymentStatusRunning || status.Status == domain.DeploymentStatusProvisioning {
+		return h.scheduler.ScheduleSync(ctx, deployment)
 	}
 	return nil
 }

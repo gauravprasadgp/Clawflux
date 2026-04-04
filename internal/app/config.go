@@ -12,6 +12,8 @@ type Config struct {
 	RepositoryDriver    string
 	RedisAddr           string
 	RedisQueue          string
+	JobMaxAttempts      int
+	JobRetryBackoff     time.Duration
 	MediumClientID      string
 	DevelopmentAuth     bool
 	AllowedIngressHost  string
@@ -27,6 +29,8 @@ func LoadConfig() Config {
 		RepositoryDriver:   env("REPOSITORY_DRIVER", "postgres"),
 		RedisAddr:          env("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisQueue:         env("REDIS_QUEUE", "clawplane:jobs"),
+		JobMaxAttempts:     envInt("JOB_MAX_ATTEMPTS", 3),
+		JobRetryBackoff:    envDuration("JOB_RETRY_BACKOFF", 2*time.Second),
 		MediumClientID:     env("MEDIUM_CLIENT_ID", "dev-medium-client"),
 		DevelopmentAuth:    envBool("DEVELOPMENT_AUTH", true),
 		AllowedIngressHost: env("DEFAULT_INGRESS_HOST", "apps.localhost"),

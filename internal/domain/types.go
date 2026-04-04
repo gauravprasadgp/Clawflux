@@ -239,6 +239,7 @@ type HealthChecker interface {
 type Scheduler interface {
 	ScheduleDeployment(ctx context.Context, deployment *Deployment) error
 	ScheduleDelete(ctx context.Context, deployment *Deployment) error
+	ScheduleSync(ctx context.Context, deployment *Deployment) error
 }
 
 type UserRepository interface {
