@@ -1,0 +1,1121 @@
+basePath: /
+definitions:
+  domain.APIKey:
+    properties:
+      created_at:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      key_prefix:
+        type: string
+      last_used_at:
+        type: string
+      name:
+        type: string
+      revoked_at:
+        type: string
+      tenant_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  domain.Actor:
+    properties:
+      api_key_id:
+        type: string
+      email:
+        type: string
+      is_platform_admin:
+        type: boolean
+      role:
+        $ref: '#/definitions/domain.Role'
+      tenant_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  domain.AdminSummary:
+    properties:
+      apps:
+        type: integer
+      deployments:
+        type: integer
+      failed_deployments:
+        type: integer
+      repository_driver:
+        type: string
+      tenants:
+        type: integer
+      users:
+        type: integer
+    type: object
+  domain.App:
+    properties:
+      config:
+        $ref: '#/definitions/domain.AppConfig'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      current_deployment_id:
+        type: string
+      desired_state:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  domain.AppConfig:
+    properties:
+      cpu_limit:
+        type: string
+      cpu_request:
+        type: string
+      domain:
+        type: string
+      env:
+        additionalProperties:
+          type: string
+        type: object
+      image:
+        type: string
+      memory_limit:
+        type: string
+      memory_request:
+        type: string
+      port:
+        type: integer
+      public:
+        type: boolean
+      replicas:
+        type: integer
+      service_account_name:
+        type: string
+    type: object
+  domain.AuditLog:
+    properties:
+      action:
+        type: string
+      actor_api_key_id:
+        type: string
+      actor_user_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      resource_id:
+        type: string
+      resource_type:
+        type: string
+      tenant_id:
+        type: string
+    type: object
+  domain.BackendRef:
+    properties:
+      deployment:
+        type: string
+      ingress_name:
+        type: string
+      namespace:
+        type: string
+      service:
+        type: string
+    type: object
+  domain.Deployment:
+    properties:
+      app_id:
+        type: string
+      backend:
+        type: string
+      backend_ref:
+        $ref: '#/definitions/domain.BackendRef'
+      config_snapshot:
+        $ref: '#/definitions/domain.AppConfig'
+      created_at:
+        type: string
+      finished_at:
+        type: string
+      id:
+        type: string
+      image_ref:
+        type: string
+      requested_by:
+        type: string
+      started_at:
+        type: string
+      status:
+        $ref: '#/definitions/domain.DeploymentStatus'
+      status_reason:
+        type: string
+      tenant_id:
+        type: string
+      updated_at:
+        type: string
+      version:
+        type: integer
+    type: object
+  domain.DeploymentEvent:
+    properties:
+      created_at:
+        type: string
+      deployment_id:
+        type: string
+      id:
+        type: string
+      message:
+        type: string
+      tenant_id:
+        type: string
+      type:
+        type: string
+    type: object
+  domain.DeploymentStatus:
+    enum:
+    - requested
+    - queued
+    - provisioning
+    - running
+    - failed
+    - cancelled
+    - deleting
+    - deleted
+    type: string
+    x-enum-varnames:
+    - DeploymentStatusRequested
+    - DeploymentStatusQueued
+    - DeploymentStatusProvisioning
+    - DeploymentStatusRunning
+    - DeploymentStatusFailed
+    - DeploymentStatusCancelled
+    - DeploymentStatusDeleting
+    - DeploymentStatusDeleted
+  domain.Role:
+    enum:
+    - owner
+    - admin
+    - member
+    type: string
+    x-enum-varnames:
+    - RoleOwner
+    - RoleAdmin
+    - RoleMember
+  http.APIKeyCreateRequest:
+    properties:
+      name:
+        type: string
+    type: object
+  http.APIKeyCreateResultResponse:
+    properties:
+      key:
+        $ref: '#/definitions/domain.APIKey'
+      secret:
+        type: string
+    type: object
+  http.APIKeyListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/domain.APIKey'
+        type: array
+    type: object
+  http.AppListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/domain.App'
+        type: array
+    type: object
+  http.AuditLogListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/domain.AuditLog'
+        type: array
+    type: object
+  http.AuthProvidersResponse:
+    properties:
+      providers:
+        items:
+          type: string
+        type: array
+    type: object
+  http.DeploymentEventListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/domain.DeploymentEvent'
+        type: array
+    type: object
+  http.DeploymentListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/domain.Deployment'
+        type: array
+    type: object
+  http.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  http.HealthStatusResponse:
+    properties:
+      status:
+        type: string
+    type: object
+  http.LoginURLResponse:
+    properties:
+      url:
+        type: string
+    type: object
+  http.ReadinessStatusResponse:
+    additionalProperties:
+      type: string
+    type: object
+  services.CreateAppInput:
+    properties:
+      config:
+        $ref: '#/definitions/domain.AppConfig'
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
+  services.UpdateAppInput:
+    properties:
+      config:
+        $ref: '#/definitions/domain.AppConfig'
+      desired_state:
+        type: string
+      name:
+        type: string
+    type: object
+info:
+  contact: {}
+  description: |-
+    Code-first Swagger docs for the current ClawPlane HTTP API.
+
+    Auth behavior:
+    - Most /v1 endpoints accept either X-API-Key or X-User-Email.
+    - DEVELOPMENT_AUTH=true allows unauthenticated local requests as developer@local.
+    - Platform admin endpoints additionally require X-Platform-Admin: true.
+  title: ClawPlane API
+  version: 0.1.0
+paths:
+  /healthz:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.HealthStatusResponse'
+      summary: Liveness check
+      tags:
+      - Health
+  /readyz:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.ReadinessStatusResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/http.ReadinessStatusResponse'
+      summary: Readiness check
+      tags:
+      - Health
+  /v1/admin/audit-logs:
+    get:
+      parameters:
+      - description: Maximum number of logs to return
+        in: query
+        maximum: 200
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AuditLogListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List tenant audit logs
+      tags:
+      - Audit
+  /v1/admin/summary:
+    get:
+      parameters:
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.AdminSummary'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get platform summary
+      tags:
+      - Admin
+  /v1/api-keys:
+    get:
+      parameters:
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.APIKeyListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List tenant API keys
+      tags:
+      - API Keys
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      - description: API key create request
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/http.APIKeyCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/http.APIKeyCreateResultResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Create a tenant API key
+      tags:
+      - API Keys
+  /v1/api-keys/{keyID}:
+    delete:
+      parameters:
+      - description: API key ID
+        in: path
+        name: keyID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Revoke an API key
+      tags:
+      - API Keys
+  /v1/apps:
+    get:
+      parameters:
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AppListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List apps for the current tenant
+      tags:
+      - Apps
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      - description: App definition
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/services.CreateAppInput'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.App'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Create an app
+      tags:
+      - Apps
+  /v1/apps/{appID}:
+    get:
+      parameters:
+      - description: App ID
+        in: path
+        name: appID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.App'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get an app
+      tags:
+      - Apps
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: App ID
+        in: path
+        name: appID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      - description: Partial app update
+        in: body
+        name: input
+        required: true
+        schema:
+          $ref: '#/definitions/services.UpdateAppInput'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.App'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Update an app
+      tags:
+      - Apps
+  /v1/apps/{appID}/deployments:
+    get:
+      parameters:
+      - description: App ID
+        in: path
+        name: appID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DeploymentListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List deployments for an app
+      tags:
+      - Deployments
+    post:
+      parameters:
+      - description: App ID
+        in: path
+        name: appID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/domain.Deployment'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Create a deployment for an app
+      tags:
+      - Deployments
+  /v1/auth/medium/callback:
+    get:
+      parameters:
+      - description: OAuth callback code
+        in: query
+        name: code
+        type: string
+      - description: Redirect URI
+        in: query
+        name: redirect_uri
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Actor'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Handle Medium OAuth callback
+      tags:
+      - Auth
+  /v1/auth/medium/login:
+    get:
+      parameters:
+      - description: Redirect URI
+        in: query
+        name: redirect_uri
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.LoginURLResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get Medium OAuth login URL
+      tags:
+      - Auth
+  /v1/auth/providers:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AuthProvidersResponse'
+      summary: List supported auth providers
+      tags:
+      - Auth
+  /v1/deployments/{deploymentID}:
+    get:
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: deploymentID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Deployment'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get a deployment
+      tags:
+      - Deployments
+  /v1/deployments/{deploymentID}/cancel:
+    post:
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: deploymentID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Deployment'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Cancel a queued or provisioning deployment
+      tags:
+      - Deployments
+  /v1/deployments/{deploymentID}/delete:
+    post:
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: deploymentID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Deployment'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Queue deployment deletion
+      tags:
+      - Deployments
+  /v1/deployments/{deploymentID}/events:
+    get:
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: deploymentID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DeploymentEventListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List deployment events
+      tags:
+      - Deployments
+  /v1/deployments/{deploymentID}/retry:
+    post:
+      parameters:
+      - description: Deployment ID
+        in: path
+        name: deploymentID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Deployment'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Retry a failed or cancelled deployment
+      tags:
+      - Deployments
+  /v1/me:
+    get:
+      parameters:
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Actor'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Return the current actor
+      tags:
+      - Auth
+schemes:
+- http
+securityDefinitions:
+  APIKeyHeader:
+    in: header
+    name: X-API-Key
+    type: apiKey
+  UserEmailHeader:
+    in: header
+    name: X-User-Email
+    type: apiKey
+swagger: "2.0"

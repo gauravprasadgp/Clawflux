@@ -44,6 +44,12 @@ Generated files will be written to:
 docs/swagger/
 ```
 
+Swagger UI will then be available at:
+
+```text
+http://localhost:8080/swagger/
+```
+
 ## Start worker
 
 ```bash

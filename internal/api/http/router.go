@@ -36,6 +36,15 @@ func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, ap
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", r.handleHealth)
 	mux.HandleFunc("/readyz", r.handleReady)
+	mux.HandleFunc("/swagger", r.handleSwaggerUI)
+	mux.HandleFunc("/swagger/", func(w http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/swagger", "/swagger/":
+			r.handleSwaggerUI(w, req)
+		default:
+			r.handleSwaggerAssets(w, req)
+		}
+	})
 	mux.HandleFunc("/v1/me", r.withMiddleware(r.withActor(r.handleMe)))
 	mux.HandleFunc("/v1/auth/providers", r.handleProviders)
 	mux.HandleFunc("/v1/auth/medium/login", r.handleMediumLogin)
