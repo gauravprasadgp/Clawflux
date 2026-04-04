@@ -28,6 +28,10 @@ func (h *DeploymentCreateHandler) Handle(ctx context.Context, job domain.Job) er
 	if err != nil {
 		return err
 	}
+	switch deployment.Status {
+	case domain.DeploymentStatusCancelled, domain.DeploymentStatusDeleting, domain.DeploymentStatusDeleted:
+		return nil
+	}
 	app, err := h.apps.GetByID(ctx, job.TenantID, job.AppID)
 	if err != nil {
 		return err

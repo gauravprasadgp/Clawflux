@@ -95,6 +95,27 @@ func (c *Client) Dequeue(ctx context.Context) (domain.Job, error) {
 	return job, nil
 }
 
+func (c *Client) Check(ctx context.Context) error {
+	conn, err := c.dial(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if _, err := conn.Write([]byte(buildArray("PING"))); err != nil {
+		return err
+	}
+	reader := bufio.NewReader(conn)
+	line, err := readLine(reader)
+	if err != nil {
+		return err
+	}
+	if line != "+PONG" {
+		return fmt.Errorf("unexpected ping response: %s", line)
+	}
+	return nil
+}
+
 func (c *Client) dial(ctx context.Context) (net.Conn, error) {
 	var d net.Dialer
 	conn, err := d.DialContext(ctx, "tcp", c.addr)

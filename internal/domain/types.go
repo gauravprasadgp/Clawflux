@@ -30,15 +30,18 @@ const (
 	DeploymentStatusProvisioning DeploymentStatus = "provisioning"
 	DeploymentStatusRunning      DeploymentStatus = "running"
 	DeploymentStatusFailed       DeploymentStatus = "failed"
+	DeploymentStatusCancelled    DeploymentStatus = "cancelled"
 	DeploymentStatusDeleting     DeploymentStatus = "deleting"
 	DeploymentStatusDeleted      DeploymentStatus = "deleted"
 )
 
 type Actor struct {
-	UserID   string `json:"user_id"`
-	TenantID string `json:"tenant_id"`
-	Email    string `json:"email"`
-	Role     Role   `json:"role"`
+	UserID          string `json:"user_id"`
+	TenantID        string `json:"tenant_id"`
+	Email           string `json:"email"`
+	Role            Role   `json:"role"`
+	APIKeyID        string `json:"api_key_id,omitempty"`
+	IsPlatformAdmin bool   `json:"is_platform_admin"`
 }
 
 type User struct {
@@ -141,12 +144,45 @@ type APIKey struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
+type AuthIdentity struct {
+	ID                 string            `json:"id"`
+	UserID             string            `json:"user_id"`
+	Provider           string            `json:"provider"`
+	ProviderUserID     string            `json:"provider_user_id"`
+	AccessToken        string            `json:"-"`
+	RefreshToken       string            `json:"-"`
+	Metadata           map[string]string `json:"metadata"`
+	CreatedAt          time.Time         `json:"created_at"`
+	UpdatedAt          time.Time         `json:"updated_at"`
+}
+
 type ExternalIdentity struct {
 	Provider       string            `json:"provider"`
 	ProviderUserID string            `json:"provider_user_id"`
 	Email          string            `json:"email"`
 	DisplayName    string            `json:"display_name"`
 	Metadata       map[string]string `json:"metadata"`
+}
+
+type AdminSummary struct {
+	Users             int    `json:"users"`
+	Tenants           int    `json:"tenants"`
+	Apps              int    `json:"apps"`
+	Deployments       int    `json:"deployments"`
+	FailedDeployments int    `json:"failed_deployments"`
+	RepositoryDriver  string `json:"repository_driver"`
+}
+
+type AuditLog struct {
+	ID            string    `json:"id"`
+	TenantID      string    `json:"tenant_id"`
+	ActorUserID   string    `json:"actor_user_id,omitempty"`
+	ActorAPIKeyID string    `json:"actor_api_key_id,omitempty"`
+	Action        string    `json:"action"`
+	ResourceType  string    `json:"resource_type"`
+	ResourceID    string    `json:"resource_id"`
+	Message       string    `json:"message"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 type AuthProvider interface {
@@ -196,13 +232,22 @@ type JobQueue interface {
 	Dequeue(ctx context.Context) (Job, error)
 }
 
+type HealthChecker interface {
+	Check(ctx context.Context) error
+}
+
 type Scheduler interface {
 	ScheduleDeployment(ctx context.Context, deployment *Deployment) error
+	ScheduleDelete(ctx context.Context, deployment *Deployment) error
 }
 
 type UserRepository interface {
 	UpsertByEmail(ctx context.Context, email string, displayName string) (*User, error)
 	GetByID(ctx context.Context, userID string) (*User, error)
+}
+
+type AuthIdentityRepository interface {
+	Upsert(ctx context.Context, identity *AuthIdentity) error
 }
 
 type TenantRepository interface {
@@ -230,4 +275,20 @@ type DeploymentRepository interface {
 type EventRepository interface {
 	Create(ctx context.Context, event *DeploymentEvent) error
 	ListByDeployment(ctx context.Context, tenantID, deploymentID string) ([]DeploymentEvent, error)
+}
+
+type APIKeyRepository interface {
+	Create(ctx context.Context, key *APIKey) error
+	ListByTenant(ctx context.Context, tenantID string) ([]APIKey, error)
+	Revoke(ctx context.Context, tenantID, keyID string, revokedAt time.Time) error
+	GetByHash(ctx context.Context, keyHash string) (*APIKey, error)
+}
+
+type AdminRepository interface {
+	Summary(ctx context.Context) (*AdminSummary, error)
+}
+
+type AuditRepository interface {
+	Create(ctx context.Context, log *AuditLog) error
+	ListByTenant(ctx context.Context, tenantID string, limit int) ([]AuditLog, error)
 }

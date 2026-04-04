@@ -26,12 +26,20 @@ type Runtime struct {
 	Logger            *slog.Logger
 	DB                *sql.DB
 	AuthService       *services.AuthService
+	APIKeyService     *services.APIKeyService
+	AdminService      *services.AdminService
+	AuditService      *services.AuditService
+	HealthService     *services.HealthService
 	AppService        *services.AppService
 	DeploymentService *services.DeploymentService
 	Scheduler         domain.Scheduler
 	Backend           domain.DeploymentBackend
 	Queue             domain.JobQueue
 	UserRepo          domain.UserRepository
+	AuthIdentityRepo  domain.AuthIdentityRepository
+	APIKeyRepo        domain.APIKeyRepository
+	AdminRepo         domain.AdminRepository
+	AuditRepo         domain.AuditRepository
 	TenantRepo        domain.TenantRepository
 	AppRepo           domain.AppRepository
 	DeploymentRepo    domain.DeploymentRepository
@@ -40,10 +48,16 @@ type Runtime struct {
 
 func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 	logger := observability.NewLogger("clawplane")
-	queue := redis.NewClient(cfg.RedisAddr, cfg.RedisQueue)
+	redisQueue := redis.NewClient(cfg.RedisAddr, cfg.RedisQueue)
+	var queue domain.JobQueue = redisQueue
+	var queueHealth domain.HealthChecker = redisQueue
 	var (
 		db             *sql.DB
 		userRepo       domain.UserRepository
+		authIdentityRepo domain.AuthIdentityRepository
+		apiKeyRepo     domain.APIKeyRepository
+		adminRepo      domain.AdminRepository
+		auditRepo      domain.AuditRepository
 		tenantRepo     domain.TenantRepository
 		appRepo        domain.AppRepository
 		deploymentRepo domain.DeploymentRepository
@@ -54,6 +68,10 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 	case "memory":
 		state := memory.NewState()
 		userRepo = memory.NewUserRepo(state)
+		authIdentityRepo = memory.NewAuthIdentityRepo(state)
+		apiKeyRepo = memory.NewAPIKeyRepo(state)
+		adminRepo = memory.NewAdminRepo(state)
+		auditRepo = memory.NewAuditRepo(state)
 		tenantRepo = memory.NewTenantRepo(state)
 		appRepo = memory.NewAppRepo(state)
 		deploymentRepo = memory.NewDeploymentRepo(state)
@@ -74,6 +92,10 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 		}
 		base := pgrepo.NewBase(db)
 		userRepo = pgrepo.NewUserRepo(base)
+		authIdentityRepo = pgrepo.NewAuthIdentityRepo(base)
+		apiKeyRepo = pgrepo.NewAPIKeyRepo(base)
+		adminRepo = pgrepo.NewAdminRepo(base)
+		auditRepo = pgrepo.NewAuditRepo(base)
 		tenantRepo = pgrepo.NewTenantRepo(base)
 		appRepo = pgrepo.NewAppRepo(base)
 		deploymentRepo = pgrepo.NewDeploymentRepo(base)
@@ -82,24 +104,36 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 		return nil, fmt.Errorf("unsupported repository driver %q", cfg.RepositoryDriver)
 	}
 
-	authService := services.NewAuthService(userRepo, tenantRepo, []domain.AuthProvider{
+	apiKeyService := services.NewAPIKeyService(apiKeyRepo)
+	authService := services.NewAuthService(userRepo, tenantRepo, authIdentityRepo, apiKeyService, []domain.AuthProvider{
 		medium.New(cfg.MediumClientID),
 	})
 	appService := services.NewAppService(appRepo, tenantRepo)
 	scheduler := services.NewSchedulerService(queue)
 	deploymentService := services.NewDeploymentService(appRepo, deploymentRepo, eventRepo, scheduler)
+	adminService := services.NewAdminService(adminRepo, cfg.RepositoryDriver)
+	auditService := services.NewAuditService(auditRepo)
+	healthService := services.NewHealthService(db, queueHealth)
 
 	return &Runtime{
 		Config:            cfg,
 		Logger:            logger,
 		DB:                db,
 		AuthService:       authService,
+		APIKeyService:     apiKeyService,
+		AdminService:      adminService,
+		AuditService:      auditService,
+		HealthService:     healthService,
 		AppService:        appService,
 		DeploymentService: deploymentService,
 		Scheduler:         scheduler,
 		Backend:           kubernetes.NewBackend(),
 		Queue:             queue,
 		UserRepo:          userRepo,
+		AuthIdentityRepo:  authIdentityRepo,
+		APIKeyRepo:        apiKeyRepo,
+		AdminRepo:         adminRepo,
+		AuditRepo:         auditRepo,
 		TenantRepo:        tenantRepo,
 		AppRepo:           appRepo,
 		DeploymentRepo:    deploymentRepo,
@@ -108,14 +142,16 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 }
 
 func (r *Runtime) HTTPHandler() http.Handler {
-	return httpapi.NewRouter(r.Config.DevelopmentAuth, r.AuthService, r.AppService, r.DeploymentService)
+	return httpapi.NewRouter(r.Logger, r.Config.DevelopmentAuth, r.AuthService, r.APIKeyService, r.AdminService, r.AuditService, r.HealthService, r.AppService, r.DeploymentService)
 }
 
 func (r *Runtime) Worker() *workerpkg.Consumer {
 	logger := observability.NewLogger("clawplane-worker")
 	consumer := workerpkg.NewConsumer(logger, r.Queue)
 	deploymentCreate := workerhandlers.NewDeploymentCreateHandler(r.AppRepo, r.DeploymentRepo, r.Backend, r.DeploymentService)
+	deploymentDelete := workerhandlers.NewDeploymentDeleteHandler(r.AppRepo, r.DeploymentRepo, r.Backend, r.DeploymentService)
 	consumer.Register(domain.JobTypeDeploymentCreate, deploymentCreate.Handle)
+	consumer.Register(domain.JobTypeDeploymentDelete, deploymentDelete.Handle)
 	return consumer
 }
 

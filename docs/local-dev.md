@@ -47,3 +47,29 @@ You can also set:
 X-User-Email: alice@example.com
 X-User-Name: Alice
 ```
+
+## API key flow
+
+Create an API key:
+
+```bash
+curl -X POST http://localhost:8080/v1/api-keys \
+  -H 'Content-Type: application/json' \
+  -H 'X-User-Email: alice@example.com' \
+  -d '{"name":"local-cli"}'
+```
+
+Use the returned secret:
+
+```bash
+curl http://localhost:8080/v1/me \
+  -H 'X-API-Key: cc_your_secret'
+```
+
+## Admin summary
+
+```bash
+curl http://localhost:8080/v1/admin/summary \
+  -H 'X-User-Email: admin@example.com' \
+  -H 'X-Platform-Admin: true'
+```

@@ -8,6 +8,8 @@ Kubernetes-only backend scaffold for multi-tenant OpenClaw control plane.
 - `cmd/worker`: async deployment reconciler.
 - `Redis`: queue transport using a minimal RESP client.
 - `Kubernetes backend`: namespace-per-tenant naming and deployment refs.
+- `Admin service`: platform summary endpoints for operators.
+- `API key service`: machine auth for backend clients and automation.
 
 ## Request flow
 
@@ -22,6 +24,8 @@ Kubernetes-only backend scaffold for multi-tenant OpenClaw control plane.
 - Production runtime uses PostgreSQL repositories when `REPOSITORY_DRIVER=postgres`.
 - In-memory repositories are still available for isolated development or tests.
 - Auth middleware provisions a local actor from `X-User-Email` during development.
+- API clients can authenticate with `X-API-Key`.
+- Platform admin endpoints currently use `X-Platform-Admin: true` as a temporary operator guardrail.
 - Backend implementation is intentionally K8s-only.
 - Deployment scheduling is now a first-class service boundary between API and queue.
 

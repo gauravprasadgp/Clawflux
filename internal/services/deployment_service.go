@@ -79,6 +79,70 @@ func (s *DeploymentService) ListEvents(ctx context.Context, actor domain.Actor, 
 	return s.events.ListByDeployment(ctx, actor.TenantID, deploymentID)
 }
 
+func (s *DeploymentService) RetryDeployment(ctx context.Context, actor domain.Actor, deploymentID string) (*domain.Deployment, error) {
+	deployment, err := s.deployments.GetByID(ctx, actor.TenantID, deploymentID)
+	if err != nil {
+		return nil, err
+	}
+	if deployment.Status != domain.DeploymentStatusFailed && deployment.Status != domain.DeploymentStatusCancelled {
+		return nil, domain.ErrValidation
+	}
+	deployment.Status = domain.DeploymentStatusQueued
+	deployment.StatusReason = ""
+	deployment.FinishedAt = nil
+	deployment.UpdatedAt = time.Now().UTC()
+	if err := s.deployments.Update(ctx, deployment); err != nil {
+		return nil, err
+	}
+	if err := s.events.Create(ctx, &domain.DeploymentEvent{
+		ID:           idgen.New("evt"),
+		DeploymentID: deployment.ID,
+		TenantID:     deployment.TenantID,
+		Type:         "retry_queued",
+		Message:      "deployment retry queued",
+		CreatedAt:    time.Now().UTC(),
+	}); err != nil {
+		return nil, err
+	}
+	if err := s.scheduler.ScheduleDeployment(ctx, deployment); err != nil {
+		return nil, err
+	}
+	return deployment, nil
+}
+
+func (s *DeploymentService) CancelDeployment(ctx context.Context, actor domain.Actor, deploymentID string) (*domain.Deployment, error) {
+	deployment, err := s.deployments.GetByID(ctx, actor.TenantID, deploymentID)
+	if err != nil {
+		return nil, err
+	}
+	switch deployment.Status {
+	case domain.DeploymentStatusQueued, domain.DeploymentStatusProvisioning:
+	default:
+		return nil, domain.ErrValidation
+	}
+	if err := s.MarkDeploymentStatus(ctx, deployment, domain.DeploymentStatusCancelled, "deployment cancelled"); err != nil {
+		return nil, err
+	}
+	return deployment, nil
+}
+
+func (s *DeploymentService) DeleteDeployment(ctx context.Context, actor domain.Actor, deploymentID string) (*domain.Deployment, error) {
+	deployment, err := s.deployments.GetByID(ctx, actor.TenantID, deploymentID)
+	if err != nil {
+		return nil, err
+	}
+	if deployment.Status == domain.DeploymentStatusDeleted || deployment.Status == domain.DeploymentStatusDeleting {
+		return deployment, nil
+	}
+	if err := s.MarkDeploymentStatus(ctx, deployment, domain.DeploymentStatusDeleting, "deployment deletion queued"); err != nil {
+		return nil, err
+	}
+	if err := s.scheduler.ScheduleDelete(ctx, deployment); err != nil {
+		return nil, err
+	}
+	return deployment, nil
+}
+
 func (s *DeploymentService) MarkDeploymentStatus(ctx context.Context, deployment *domain.Deployment, status domain.DeploymentStatus, reason string) error {
 	now := time.Now().UTC()
 	deployment.Status = status
@@ -87,7 +151,7 @@ func (s *DeploymentService) MarkDeploymentStatus(ctx context.Context, deployment
 	if status == domain.DeploymentStatusProvisioning && deployment.StartedAt == nil {
 		deployment.StartedAt = &now
 	}
-	if status == domain.DeploymentStatusRunning || status == domain.DeploymentStatusFailed || status == domain.DeploymentStatusDeleted {
+	if status == domain.DeploymentStatusRunning || status == domain.DeploymentStatusFailed || status == domain.DeploymentStatusCancelled || status == domain.DeploymentStatusDeleted {
 		deployment.FinishedAt = &now
 	}
 	if err := s.deployments.Update(ctx, deployment); err != nil {

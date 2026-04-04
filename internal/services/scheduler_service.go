@@ -27,3 +27,15 @@ func (s *SchedulerService) ScheduleDeployment(ctx context.Context, deployment *d
 		CreatedAt:    time.Now().UTC(),
 	})
 }
+
+func (s *SchedulerService) ScheduleDelete(ctx context.Context, deployment *domain.Deployment) error {
+	return s.queue.Enqueue(ctx, domain.Job{
+		ID:           idgen.New("job"),
+		Type:         domain.JobTypeDeploymentDelete,
+		TenantID:     deployment.TenantID,
+		AppID:        deployment.AppID,
+		DeploymentID: deployment.ID,
+		Attempts:     0,
+		CreatedAt:    time.Now().UTC(),
+	})
+}

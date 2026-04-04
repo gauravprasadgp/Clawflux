@@ -17,6 +17,9 @@ type State struct {
 	usersByEmail  map[string]string
 	tenants       map[string]*domain.Tenant
 	members       map[string]domain.TenantMember
+	authIDs       map[string]domain.AuthIdentity
+	apiKeys       map[string]*domain.APIKey
+	auditLogs     []domain.AuditLog
 	apps          map[string]*domain.App
 	deployments   map[string]*domain.Deployment
 	events        map[string][]domain.DeploymentEvent
@@ -29,6 +32,9 @@ func NewState() *State {
 		usersByEmail:  map[string]string{},
 		tenants:       map[string]*domain.Tenant{},
 		members:       map[string]domain.TenantMember{},
+		authIDs:       map[string]domain.AuthIdentity{},
+		apiKeys:       map[string]*domain.APIKey{},
+		auditLogs:     []domain.AuditLog{},
 		apps:          map[string]*domain.App{},
 		deployments:   map[string]*domain.Deployment{},
 		events:        map[string][]domain.DeploymentEvent{},
@@ -38,12 +44,20 @@ func NewState() *State {
 
 type UserRepo struct{ state *State }
 type TenantRepo struct{ state *State }
+type AuthIdentityRepo struct{ state *State }
+type APIKeyRepo struct{ state *State }
+type AdminRepo struct{ state *State }
+type AuditRepo struct{ state *State }
 type AppRepo struct{ state *State }
 type DeploymentRepo struct{ state *State }
 type EventRepo struct{ state *State }
 
 func NewUserRepo(state *State) *UserRepo               { return &UserRepo{state: state} }
 func NewTenantRepo(state *State) *TenantRepo           { return &TenantRepo{state: state} }
+func NewAuthIdentityRepo(state *State) *AuthIdentityRepo { return &AuthIdentityRepo{state: state} }
+func NewAPIKeyRepo(state *State) *APIKeyRepo           { return &APIKeyRepo{state: state} }
+func NewAdminRepo(state *State) *AdminRepo             { return &AdminRepo{state: state} }
+func NewAuditRepo(state *State) *AuditRepo             { return &AuditRepo{state: state} }
 func NewAppRepo(state *State) *AppRepo                 { return &AppRepo{state: state} }
 func NewDeploymentRepo(state *State) *DeploymentRepo   { return &DeploymentRepo{state: state} }
 func NewEventRepo(state *State) *EventRepo             { return &EventRepo{state: state} }
@@ -146,6 +160,101 @@ func (r *TenantRepo) GetMember(_ context.Context, tenantID, userID string) (*dom
 	}
 	m := member
 	return &m, nil
+}
+
+func (r *AuthIdentityRepo) Upsert(_ context.Context, identity *domain.AuthIdentity) error {
+	r.state.mu.Lock()
+	defer r.state.mu.Unlock()
+	key := identity.Provider + ":" + identity.ProviderUserID
+	cp := *identity
+	r.state.authIDs[key] = cp
+	return nil
+}
+
+func (r *APIKeyRepo) Create(_ context.Context, key *domain.APIKey) error {
+	r.state.mu.Lock()
+	defer r.state.mu.Unlock()
+	cp := *key
+	r.state.apiKeys[key.ID] = &cp
+	return nil
+}
+
+func (r *APIKeyRepo) ListByTenant(_ context.Context, tenantID string) ([]domain.APIKey, error) {
+	r.state.mu.RLock()
+	defer r.state.mu.RUnlock()
+	out := make([]domain.APIKey, 0)
+	for _, key := range r.state.apiKeys {
+		if key.TenantID == tenantID {
+			out = append(out, *key)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out, nil
+}
+
+func (r *APIKeyRepo) Revoke(_ context.Context, tenantID, keyID string, revokedAt time.Time) error {
+	r.state.mu.Lock()
+	defer r.state.mu.Unlock()
+	key, ok := r.state.apiKeys[keyID]
+	if !ok || key.TenantID != tenantID {
+		return domain.ErrNotFound
+	}
+	key.RevokedAt = &revokedAt
+	return nil
+}
+
+func (r *APIKeyRepo) GetByHash(_ context.Context, keyHash string) (*domain.APIKey, error) {
+	r.state.mu.Lock()
+	defer r.state.mu.Unlock()
+	for _, key := range r.state.apiKeys {
+		if key.KeyHash == keyHash {
+			now := time.Now().UTC()
+			key.LastUsedAt = &now
+			cp := *key
+			return &cp, nil
+		}
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (r *AdminRepo) Summary(_ context.Context) (*domain.AdminSummary, error) {
+	r.state.mu.RLock()
+	defer r.state.mu.RUnlock()
+	summary := &domain.AdminSummary{
+		Users:       len(r.state.users),
+		Tenants:     len(r.state.tenants),
+		Apps:        len(r.state.apps),
+		Deployments: len(r.state.deployments),
+	}
+	for _, dep := range r.state.deployments {
+		if dep.Status == domain.DeploymentStatusFailed {
+			summary.FailedDeployments++
+		}
+	}
+	return summary, nil
+}
+
+func (r *AuditRepo) Create(_ context.Context, log *domain.AuditLog) error {
+	r.state.mu.Lock()
+	defer r.state.mu.Unlock()
+	r.state.auditLogs = append(r.state.auditLogs, *log)
+	return nil
+}
+
+func (r *AuditRepo) ListByTenant(_ context.Context, tenantID string, limit int) ([]domain.AuditLog, error) {
+	r.state.mu.RLock()
+	defer r.state.mu.RUnlock()
+	if limit <= 0 {
+		limit = 50
+	}
+	out := make([]domain.AuditLog, 0, limit)
+	for i := len(r.state.auditLogs) - 1; i >= 0 && len(out) < limit; i-- {
+		log := r.state.auditLogs[i]
+		if log.TenantID == tenantID {
+			out = append(out, log)
+		}
+	}
+	return out, nil
 }
 
 func (r *AppRepo) Create(_ context.Context, app *domain.App) error {

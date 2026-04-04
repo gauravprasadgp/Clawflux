@@ -1,6 +1,7 @@
 package http
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -8,15 +9,25 @@ import (
 )
 
 type Router struct {
+	logger      *slog.Logger
 	auth        *services.AuthService
+	apiKeys     *services.APIKeyService
+	admin       *services.AdminService
+	audit       *services.AuditService
+	health      *services.HealthService
 	apps        *services.AppService
 	deployments *services.DeploymentService
 	devAuth     bool
 }
 
-func NewRouter(devAuth bool, auth *services.AuthService, apps *services.AppService, deployments *services.DeploymentService) http.Handler {
+func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, apiKeys *services.APIKeyService, admin *services.AdminService, audit *services.AuditService, health *services.HealthService, apps *services.AppService, deployments *services.DeploymentService) http.Handler {
 	r := &Router{
+		logger:      logger,
 		auth:        auth,
+		apiKeys:     apiKeys,
+		admin:       admin,
+		audit:       audit,
+		health:      health,
 		apps:        apps,
 		deployments: deployments,
 		devAuth:     devAuth,
@@ -24,13 +35,19 @@ func NewRouter(devAuth bool, auth *services.AuthService, apps *services.AppServi
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", r.handleHealth)
-	mux.HandleFunc("/v1/me", r.withActor(r.handleMe))
+	mux.HandleFunc("/readyz", r.handleReady)
+	mux.HandleFunc("/v1/me", r.withMiddleware(r.withActor(r.handleMe)))
 	mux.HandleFunc("/v1/auth/providers", r.handleProviders)
 	mux.HandleFunc("/v1/auth/medium/login", r.handleMediumLogin)
-	mux.HandleFunc("/v1/apps", r.withActor(r.handleApps))
-	mux.HandleFunc("/v1/apps/", r.withActor(r.handleAppRoutes))
-	mux.HandleFunc("/v1/deployments/", r.withActor(r.handleDeploymentRoutes))
-	return mux
+	mux.HandleFunc("/v1/auth/medium/callback", r.withMiddleware(r.handleMediumCallback))
+	mux.HandleFunc("/v1/api-keys", r.withMiddleware(r.withActor(r.handleAPIKeys)))
+	mux.HandleFunc("/v1/api-keys/", r.withMiddleware(r.withActor(r.handleAPIKeyRoutes)))
+	mux.HandleFunc("/v1/admin/summary", r.withMiddleware(r.withActor(r.handleAdminSummary)))
+	mux.HandleFunc("/v1/admin/audit-logs", r.withMiddleware(r.withActor(r.handleAuditLogs)))
+	mux.HandleFunc("/v1/apps", r.withMiddleware(r.withActor(r.handleApps)))
+	mux.HandleFunc("/v1/apps/", r.withMiddleware(r.withActor(r.handleAppRoutes)))
+	mux.HandleFunc("/v1/deployments/", r.withMiddleware(r.withActor(r.handleDeploymentRoutes)))
+	return r.withRequestLogging(mux)
 }
 
 func (r *Router) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -51,6 +68,17 @@ func (r *Router) handleMediumLogin(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"url": loginURL})
+}
+
+func (r *Router) handleMediumCallback(w http.ResponseWriter, req *http.Request) {
+	redirectURI := req.URL.Query().Get("redirect_uri")
+	code := req.URL.Query().Get("code")
+	actor, err := r.auth.HandleOAuthCallback(req.Context(), "medium", code, redirectURI)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, actor)
 }
 
 func (r *Router) handleApps(w http.ResponseWriter, req *http.Request) {
@@ -99,8 +127,41 @@ func (r *Router) handleDeploymentRoutes(w http.ResponseWriter, req *http.Request
 		r.getDeployment(w, req, parts[0])
 		return
 	}
+	if len(parts) == 2 && parts[1] == "retry" && req.Method == http.MethodPost {
+		r.retryDeployment(w, req, parts[0])
+		return
+	}
+	if len(parts) == 2 && parts[1] == "cancel" && req.Method == http.MethodPost {
+		r.cancelDeployment(w, req, parts[0])
+		return
+	}
+	if len(parts) == 2 && parts[1] == "delete" && req.Method == http.MethodPost {
+		r.deleteDeployment(w, req, parts[0])
+		return
+	}
 	if len(parts) == 2 && parts[1] == "events" && req.Method == http.MethodGet {
 		r.listDeploymentEvents(w, req, parts[0])
+		return
+	}
+	http.NotFound(w, req)
+}
+
+func (r *Router) handleAPIKeys(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodGet:
+		r.listAPIKeys(w, req)
+	case http.MethodPost:
+		r.createAPIKey(w, req)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (r *Router) handleAPIKeyRoutes(w http.ResponseWriter, req *http.Request) {
+	path := strings.TrimPrefix(req.URL.Path, "/v1/api-keys/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 1 && req.Method == http.MethodDelete {
+		r.deleteAPIKey(w, req, parts[0])
 		return
 	}
 	http.NotFound(w, req)
