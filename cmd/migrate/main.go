@@ -15,6 +15,9 @@ import (
 )
 
 func main() {
+	if err := app.LoadDotEnv(".env"); err != nil {
+		log.Fatal(err)
+	}
 	cfg := app.LoadConfig()
 	if cfg.DatabaseURL == "" {
 		log.Fatal("DATABASE_URL is required")

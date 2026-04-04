@@ -8,6 +8,9 @@ import (
 )
 
 func main() {
+	if err := app.LoadDotEnv(".env"); err != nil {
+		log.Fatal(err)
+	}
 	cfg := app.LoadConfig()
 	runtime, err := app.NewRuntime(context.Background(), cfg)
 	if err != nil {
