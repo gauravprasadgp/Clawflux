@@ -17,15 +17,34 @@ GOFLAGS := -trimpath
 .PHONY: all build api worker migrate \
         run run-worker migrate-up dev infra-up infra-down \
         test test-race test-cover \
-        lint fmt vet \
+        lint fmt vet swag \
         docker-build docker-up docker-down docker-logs \
         clean help
 
 # ── Default ───────────────────────────────────────────────────────────────────
 all: build
 
-# ── Build ─────────────────────────────────────────────────────────────────────
-build: api worker migrate
+# ── Swagger doc generation ────────────────────────────────────────────────────
+# Automatically installs swag and uses full path (no PATH issues)
+SWAG := $(shell go env GOPATH)/bin/swag
+
+swag:
+	@echo "==> Ensuring swag is installed..."
+	@test -x $(SWAG) || ( \
+		echo "Installing swag..."; \
+		go install github.com/swaggo/swag/cmd/swag@latest; \
+	)
+
+	@echo "==> Generating Swagger docs..."
+	$(SWAG) init \
+		--parseInternal \
+		--generalInfo cmd/api/main.go \
+		--output docs/swagger
+
+	@echo "Swagger docs written to docs/swagger/"
+
+# ── Build (regenerates swagger docs first) ────────────────────────────────────
+build: swag api worker migrate
 
 api:
 	@mkdir -p bin
@@ -150,10 +169,11 @@ help:
 	@echo ""
 	@echo "  Build"
 	@echo "  -----"
-	@echo "  build          Build all binaries (api, worker, migrate)"
+	@echo "  build          Build all binaries (regenerates Swagger docs first)"
 	@echo "  api            Build the API binary only"
 	@echo "  worker         Build the worker binary only"
 	@echo "  migrate        Build the migrate binary only"
+	@echo "  swag           Regenerate Swagger docs from annotations"
 	@echo ""
 	@echo "  Testing & quality"
 	@echo "  -----------------"
@@ -172,4 +192,8 @@ help:
 	@echo "  docker-logs    Tail api + worker logs"
 	@echo ""
 	@echo "  clean          Remove build artifacts"
+	@echo ""
+	@echo "  One-time setup:"
+	@echo "    go install github.com/swaggo/swag/cmd/swag@latest"
+	@echo "    brew install golangci-lint  (or see golangci-lint.run)"
 	@echo ""

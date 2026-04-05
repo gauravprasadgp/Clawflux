@@ -1630,7 +1630,10 @@ const docTemplate = `{
         "http.ErrorResponse": {
             "type": "object",
             "properties": {
-                "error": {
+                "code": {
+                    "type": "string"
+                },
+                "message": {
                     "type": "string"
                 }
             }

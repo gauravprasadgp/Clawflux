@@ -267,7 +267,9 @@ definitions:
     type: object
   http.ErrorResponse:
     properties:
-      error:
+      code:
+        type: string
+      message:
         type: string
     type: object
   http.HealthStatusResponse:
