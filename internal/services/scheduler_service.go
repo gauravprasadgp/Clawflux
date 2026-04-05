@@ -18,7 +18,7 @@ func NewSchedulerService(queue domain.JobQueue) *SchedulerService {
 
 func (s *SchedulerService) ScheduleDeployment(ctx context.Context, deployment *domain.Deployment) error {
 	return s.queue.Enqueue(ctx, domain.Job{
-		ID:           idgen.New("job"),
+		ID:           idgen.NewUUID(),
 		Type:         domain.JobTypeDeploymentCreate,
 		TenantID:     deployment.TenantID,
 		AppID:        deployment.AppID,
@@ -30,7 +30,7 @@ func (s *SchedulerService) ScheduleDeployment(ctx context.Context, deployment *d
 
 func (s *SchedulerService) ScheduleDelete(ctx context.Context, deployment *domain.Deployment) error {
 	return s.queue.Enqueue(ctx, domain.Job{
-		ID:           idgen.New("job"),
+		ID:           idgen.NewUUID(),
 		Type:         domain.JobTypeDeploymentDelete,
 		TenantID:     deployment.TenantID,
 		AppID:        deployment.AppID,
@@ -42,7 +42,7 @@ func (s *SchedulerService) ScheduleDelete(ctx context.Context, deployment *domai
 
 func (s *SchedulerService) ScheduleSync(ctx context.Context, deployment *domain.Deployment) error {
 	return s.queue.Enqueue(ctx, domain.Job{
-		ID:           idgen.New("job"),
+		ID:           idgen.NewUUID(),
 		Type:         domain.JobTypeDeploymentSync,
 		TenantID:     deployment.TenantID,
 		AppID:        deployment.AppID,

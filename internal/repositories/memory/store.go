@@ -52,15 +52,15 @@ type AppRepo struct{ state *State }
 type DeploymentRepo struct{ state *State }
 type EventRepo struct{ state *State }
 
-func NewUserRepo(state *State) *UserRepo               { return &UserRepo{state: state} }
-func NewTenantRepo(state *State) *TenantRepo           { return &TenantRepo{state: state} }
+func NewUserRepo(state *State) *UserRepo                 { return &UserRepo{state: state} }
+func NewTenantRepo(state *State) *TenantRepo             { return &TenantRepo{state: state} }
 func NewAuthIdentityRepo(state *State) *AuthIdentityRepo { return &AuthIdentityRepo{state: state} }
-func NewAPIKeyRepo(state *State) *APIKeyRepo           { return &APIKeyRepo{state: state} }
-func NewAdminRepo(state *State) *AdminRepo             { return &AdminRepo{state: state} }
-func NewAuditRepo(state *State) *AuditRepo             { return &AuditRepo{state: state} }
-func NewAppRepo(state *State) *AppRepo                 { return &AppRepo{state: state} }
-func NewDeploymentRepo(state *State) *DeploymentRepo   { return &DeploymentRepo{state: state} }
-func NewEventRepo(state *State) *EventRepo             { return &EventRepo{state: state} }
+func NewAPIKeyRepo(state *State) *APIKeyRepo             { return &APIKeyRepo{state: state} }
+func NewAdminRepo(state *State) *AdminRepo               { return &AdminRepo{state: state} }
+func NewAuditRepo(state *State) *AuditRepo               { return &AuditRepo{state: state} }
+func NewAppRepo(state *State) *AppRepo                   { return &AppRepo{state: state} }
+func NewDeploymentRepo(state *State) *DeploymentRepo     { return &DeploymentRepo{state: state} }
+func NewEventRepo(state *State) *EventRepo               { return &EventRepo{state: state} }
 
 func memberKey(tenantID, userID string) string {
 	return tenantID + ":" + userID
@@ -83,7 +83,7 @@ func (r *UserRepo) UpsertByEmail(_ context.Context, email string, displayName st
 
 	now := time.Now().UTC()
 	user := &domain.User{
-		ID:          idgen.New("usr"),
+		ID:          idgen.NewUUID(),
 		Email:       key,
 		DisplayName: displayName,
 		CreatedAt:   now,
@@ -110,7 +110,7 @@ func (r *TenantRepo) CreatePersonalTenant(_ context.Context, user *domain.User) 
 
 	now := time.Now().UTC()
 	tenant := &domain.Tenant{
-		ID:        idgen.New("tn"),
+		ID:        idgen.NewUUID(),
 		Slug:      sanitizeSlug(user.Email),
 		Name:      fallbackString(user.DisplayName, user.Email),
 		Plan:      "free",

@@ -36,7 +36,7 @@ func (s *DeploymentService) CreateDeployment(ctx context.Context, actor domain.A
 
 	now := time.Now().UTC()
 	deployment := &domain.Deployment{
-		ID:             idgen.New("dep"),
+		ID:             idgen.NewUUID(),
 		TenantID:       actor.TenantID,
 		AppID:          app.ID,
 		Version:        version,
@@ -52,7 +52,7 @@ func (s *DeploymentService) CreateDeployment(ctx context.Context, actor domain.A
 		return nil, err
 	}
 	if err := s.events.Create(ctx, &domain.DeploymentEvent{
-		ID:           idgen.New("evt"),
+		ID:           idgen.NewUUID(),
 		DeploymentID: deployment.ID,
 		TenantID:     deployment.TenantID,
 		Type:         "queued",
@@ -95,7 +95,7 @@ func (s *DeploymentService) RetryDeployment(ctx context.Context, actor domain.Ac
 		return nil, err
 	}
 	if err := s.events.Create(ctx, &domain.DeploymentEvent{
-		ID:           idgen.New("evt"),
+		ID:           idgen.NewUUID(),
 		DeploymentID: deployment.ID,
 		TenantID:     deployment.TenantID,
 		Type:         "retry_queued",
@@ -158,7 +158,7 @@ func (s *DeploymentService) MarkDeploymentStatus(ctx context.Context, deployment
 		return err
 	}
 	return s.events.Create(ctx, &domain.DeploymentEvent{
-		ID:           idgen.New("evt"),
+		ID:           idgen.NewUUID(),
 		DeploymentID: deployment.ID,
 		TenantID:     deployment.TenantID,
 		Type:         string(status),
