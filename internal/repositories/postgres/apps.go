@@ -22,7 +22,7 @@ func (r *AppRepo) Create(ctx context.Context, app *domain.App) error {
 	_, err = r.db.ExecContext(ctx, `
 insert into apps (
   id, tenant_id, name, slug, desired_state, current_deployment_id, config, created_by, created_at, updated_at
-) values ($1, $2, $3, $4, $5, nullif($6, ''), $7, $8, $9, $10)
+) values ($1, $2, $3, $4, $5, nullif($6, '')::uuid, $7, $8, $9, $10)
 `, app.ID, app.TenantID, app.Name, app.Slug, app.DesiredState, app.CurrentDeploymentID, config, app.CreatedBy, app.CreatedAt, app.UpdatedAt)
 	return wrap("create app", mapSQLError(err))
 }
@@ -37,7 +37,7 @@ update apps
 set name = $3,
     slug = $4,
     desired_state = $5,
-    current_deployment_id = nullif($6, ''),
+    current_deployment_id = nullif($6, '')::uuid,
     config = $7,
     updated_at = $8
 where id = $1 and tenant_id = $2

@@ -40,7 +40,7 @@ func (s *AppService) CreateApp(ctx context.Context, actor domain.Actor, in Creat
 
 	now := time.Now().UTC()
 	app := &domain.App{
-		ID:           idgen.New("app"),
+		ID:           idgen.NewUUID(),
 		TenantID:     actor.TenantID,
 		Name:         in.Name,
 		Slug:         normalizeSlug(in.Slug),

@@ -82,7 +82,7 @@ func (r *Router) withRequestID(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		requestID := strings.TrimSpace(req.Header.Get("X-Request-ID"))
 		if requestID == "" {
-			requestID = idgen.New("req")
+			requestID = idgen.NewUUID()
 		}
 		w.Header().Set("X-Request-ID", requestID)
 		ctx := context.WithValue(req.Context(), requestIDContextKey{}, requestID)
