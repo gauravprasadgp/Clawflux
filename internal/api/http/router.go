@@ -56,7 +56,9 @@ func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, ap
 	mux.HandleFunc("/v1/apps", r.withMiddleware(r.withActor(r.handleApps)))
 	mux.HandleFunc("/v1/apps/", r.withMiddleware(r.withActor(r.handleAppRoutes)))
 	mux.HandleFunc("/v1/deployments/", r.withMiddleware(r.withActor(r.handleDeploymentRoutes)))
-	return r.withRequestLogging(mux)
+
+	// Chain global middleware: panic recovery → security headers → request logging
+	return r.withPanicRecovery(r.withSecurityHeaders(r.withRequestLogging(mux)))
 }
 
 // handleHealth godoc

@@ -1,0 +1,35 @@
+run:
+  timeout: 5m
+  go: "1.23"
+
+linters:
+  enable:
+    - errcheck       # unhandled errors
+    - gosimple       # simplifications
+    - govet          # go vet checks
+    - ineffassign    # unused assignments
+    - staticcheck    # SA/ST rules
+    - unused         # unused code
+    - gofmt          # formatting
+    - goimports      # import ordering
+    - bodyclose      # unclosed http.Response.Body
+    - contextcheck   # context passed correctly
+    - noctx          # http.NewRequest without context
+    - exhaustive     # switch exhaustiveness on enums
+    - gocritic       # opinionated but useful
+
+linters-settings:
+  govet:
+    enable-all: true
+  errcheck:
+    check-blank: true
+  exhaustive:
+    default-signifies-exhaustive: true
+
+issues:
+  exclude-rules:
+    # Test files get more latitude
+    - path: _test\.go
+      linters:
+        - errcheck
+        - gocritic

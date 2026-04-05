@@ -2,23 +2,37 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gauravprasad/clawcontrol/internal/app"
 )
 
 func main() {
 	if err := app.LoadDotEnv(".env"); err != nil {
-		log.Fatal(err)
+		slog.Error("failed to load .env", "error", err)
+		os.Exit(1)
 	}
+
 	cfg := app.LoadConfig()
-	runtime, err := app.NewRuntime(context.Background(), cfg)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	runtime, err := app.NewRuntime(ctx, cfg)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to initialise runtime", "error", err)
+		os.Exit(1)
 	}
 	defer runtime.Close()
-	log.Printf("clawplane worker consuming from %s", cfg.RedisQueue)
-	if err := runtime.Worker().Run(context.Background()); err != nil {
-		log.Fatal(err)
+
+	runtime.Logger.Info("clawplane worker starting", "queue", cfg.RedisQueue)
+
+	if err := runtime.Worker().Run(ctx); err != nil && err != context.Canceled {
+		runtime.Logger.Error("worker exited with error", "error", err)
+		os.Exit(1)
 	}
+	runtime.Logger.Info("worker stopped cleanly")
 }

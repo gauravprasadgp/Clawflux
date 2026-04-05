@@ -14,6 +14,28 @@ import (
 type actorContextKey struct{}
 type requestIDContextKey struct{}
 
+// responseWriter wraps http.ResponseWriter to capture the status code for logging.
+type responseWriter struct {
+	http.ResponseWriter
+	status      int
+	wroteHeader bool
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	if !rw.wroteHeader {
+		rw.status = code
+		rw.wroteHeader = true
+	}
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	if !rw.wroteHeader {
+		rw.WriteHeader(http.StatusOK)
+	}
+	return rw.ResponseWriter.Write(b)
+}
+
 func (r *Router) withMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return r.withRequestID(next)
 }
@@ -37,6 +59,10 @@ func (r *Router) withActor(next http.HandlerFunc) http.HandlerFunc {
 		email := strings.TrimSpace(req.Header.Get("X-User-Email"))
 		if email == "" && r.devAuth {
 			email = "developer@local"
+		}
+		if email == "" {
+			writeError(w, domain.ErrUnauthorized)
+			return
 		}
 		displayName := strings.TrimSpace(req.Header.Get("X-User-Name"))
 		actor, err := r.auth.EnsureActor(req.Context(), email, displayName)
@@ -67,17 +93,44 @@ func (r *Router) withRequestID(next http.HandlerFunc) http.HandlerFunc {
 func (r *Router) withRequestLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		start := time.Now()
-		next.ServeHTTP(w, req)
-		requestID := w.Header().Get("X-Request-ID")
+		rw := &responseWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rw, req)
+		requestID := rw.Header().Get("X-Request-ID")
 		if requestID == "" {
 			requestID = requestIDFromContext(req.Context())
 		}
 		r.logger.Info("http_request",
 			slog.String("method", req.Method),
 			slog.String("path", req.URL.Path),
+			slog.Int("status", rw.status),
 			slog.String("request_id", requestID),
+			slog.String("remote_addr", req.RemoteAddr),
 			slog.Duration("duration", time.Since(start)),
 		)
+	})
+}
+
+func (r *Router) withPanicRecovery(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				r.logger.Error("panic recovered",
+					slog.String("path", req.URL.Path),
+					slog.Any("panic", rec),
+				)
+				http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, req)
+	})
+}
+
+func (r *Router) withSecurityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		next.ServeHTTP(w, req)
 	})
 }
 

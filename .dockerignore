@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+!.env.example
+bin/
+coverage.out
+coverage.html
+*.test
+docs/
+*.md
+Makefile
+start.sh
+docker-compose.yml

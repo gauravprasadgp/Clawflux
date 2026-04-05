@@ -47,21 +47,28 @@ type Runtime struct {
 }
 
 func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
-	logger := observability.NewLogger("clawplane")
-	redisQueue := redis.NewClient(cfg.RedisAddr, cfg.RedisQueue)
+	logger := observability.NewLoggerWithLevel("clawplane", cfg.LogLevel)
+
+	// Warn loudly if running with dev auth in a non-dev context.
+	if cfg.DevelopmentAuth {
+		logger.Warn("DEVELOPMENT_AUTH is enabled — all requests are trusted without credentials; do NOT use in production")
+	}
+
+	redisQueue := redis.NewClientWithPassword(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueue)
 	var queue domain.JobQueue = redisQueue
 	var queueHealth domain.HealthChecker = redisQueue
+
 	var (
-		db             *sql.DB
-		userRepo       domain.UserRepository
+		db               *sql.DB
+		userRepo         domain.UserRepository
 		authIdentityRepo domain.AuthIdentityRepository
-		apiKeyRepo     domain.APIKeyRepository
-		adminRepo      domain.AdminRepository
-		auditRepo      domain.AuditRepository
-		tenantRepo     domain.TenantRepository
-		appRepo        domain.AppRepository
-		deploymentRepo domain.DeploymentRepository
-		eventRepo      domain.EventRepository
+		apiKeyRepo       domain.APIKeyRepository
+		adminRepo        domain.AdminRepository
+		auditRepo        domain.AuditRepository
+		tenantRepo       domain.TenantRepository
+		appRepo          domain.AppRepository
+		deploymentRepo   domain.DeploymentRepository
+		eventRepo        domain.EventRepository
 	)
 
 	switch cfg.RepositoryDriver {
@@ -76,6 +83,7 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 		appRepo = memory.NewAppRepo(state)
 		deploymentRepo = memory.NewDeploymentRepo(state)
 		eventRepo = memory.NewEventRepo(state)
+
 	case "postgres":
 		if cfg.DatabaseURL == "" {
 			return nil, fmt.Errorf("DATABASE_URL is required when REPOSITORY_DRIVER=postgres")
@@ -86,9 +94,10 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 			MaxOpenConns:    cfg.DBMaxOpenConns,
 			MaxIdleConns:    cfg.DBMaxIdleConns,
 			ConnMaxLifetime: cfg.DBConnMaxLifetime,
+			ConnMaxIdleTime: cfg.DBConnMaxIdleTime,
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("open postgres: %w", err)
 		}
 		base := pgrepo.NewBase(db)
 		userRepo = pgrepo.NewUserRepo(base)
@@ -100,8 +109,9 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 		appRepo = pgrepo.NewAppRepo(base)
 		deploymentRepo = pgrepo.NewDeploymentRepo(base)
 		eventRepo = pgrepo.NewEventRepo(base)
+
 	default:
-		return nil, fmt.Errorf("unsupported repository driver %q", cfg.RepositoryDriver)
+		return nil, fmt.Errorf("unsupported repository driver %q (choose postgres or memory)", cfg.RepositoryDriver)
 	}
 
 	apiKeyService := services.NewAPIKeyService(apiKeyRepo)
@@ -142,11 +152,21 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 }
 
 func (r *Runtime) HTTPHandler() http.Handler {
-	return httpapi.NewRouter(r.Logger, r.Config.DevelopmentAuth, r.AuthService, r.APIKeyService, r.AdminService, r.AuditService, r.HealthService, r.AppService, r.DeploymentService)
+	return httpapi.NewRouter(
+		r.Logger,
+		r.Config.DevelopmentAuth,
+		r.AuthService,
+		r.APIKeyService,
+		r.AdminService,
+		r.AuditService,
+		r.HealthService,
+		r.AppService,
+		r.DeploymentService,
+	)
 }
 
 func (r *Runtime) Worker() *workerpkg.Consumer {
-	logger := observability.NewLogger("clawplane-worker")
+	logger := observability.NewLoggerWithLevel("clawplane-worker", r.Config.LogLevel)
 	consumer := workerpkg.NewConsumer(logger, r.Queue, r.Config.JobMaxAttempts, r.Config.JobRetryBackoff)
 	deploymentCreate := workerhandlers.NewDeploymentCreateHandler(r.AppRepo, r.DeploymentRepo, r.Backend, r.DeploymentService, r.Scheduler)
 	deploymentDelete := workerhandlers.NewDeploymentDeleteHandler(r.AppRepo, r.DeploymentRepo, r.Backend, r.DeploymentService)
@@ -159,6 +179,7 @@ func (r *Runtime) Worker() *workerpkg.Consumer {
 
 func (r *Runtime) Close() error {
 	if r.DB != nil {
+		r.Logger.Info("closing database connection pool")
 		return r.DB.Close()
 	}
 	return nil

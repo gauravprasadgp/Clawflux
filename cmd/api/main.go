@@ -2,8 +2,13 @@ package main
 
 import (
 	"context"
-	"log"
+	"errors"
+	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gauravprasad/clawcontrol/internal/app"
 )
@@ -28,18 +33,47 @@ import (
 // @name X-User-Email
 func main() {
 	if err := app.LoadDotEnv(".env"); err != nil {
-		log.Fatal(err)
+		slog.Error("failed to load .env", "error", err)
+		os.Exit(1)
 	}
+
 	cfg := app.LoadConfig()
-	runtime, err := app.NewRuntime(context.Background(), cfg)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	runtime, err := app.NewRuntime(ctx, cfg)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to initialise runtime", "error", err)
+		os.Exit(1)
 	}
 	defer runtime.Close()
+
 	server := &http.Server{
-		Addr:    cfg.HTTPAddr,
-		Handler: runtime.HTTPHandler(),
+		Addr:         cfg.HTTPAddr,
+		Handler:      runtime.HTTPHandler(),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
-	log.Printf("clawplane api listening on %s", cfg.HTTPAddr)
-	log.Fatal(server.ListenAndServe())
+
+	go func() {
+		runtime.Logger.Info("clawplane api listening", "addr", cfg.HTTPAddr)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			runtime.Logger.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-ctx.Done()
+	runtime.Logger.Info("shutdown signal received, draining connections")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		runtime.Logger.Error("graceful shutdown failed", "error", err)
+		os.Exit(1)
+	}
+	runtime.Logger.Info("server stopped cleanly")
 }
