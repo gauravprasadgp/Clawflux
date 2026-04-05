@@ -47,7 +47,7 @@ type Runtime struct {
 }
 
 func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
-	logger := observability.NewLoggerWithLevel("clawplane", cfg.LogLevel)
+	logger := observability.NewLoggerWithLevel("clawflux", cfg.LogLevel)
 
 	// Warn loudly if running with dev auth in a non-dev context.
 	if cfg.DevelopmentAuth {
@@ -170,7 +170,7 @@ func (r *Runtime) HTTPHandler() http.Handler {
 }
 
 func (r *Runtime) Worker() *workerpkg.Consumer {
-	logger := observability.NewLoggerWithLevel("clawplane-worker", r.Config.LogLevel)
+	logger := observability.NewLoggerWithLevel("clawflux-worker", r.Config.LogLevel)
 	consumer := workerpkg.NewConsumer(logger, r.Queue, r.Config.JobMaxAttempts, r.Config.JobRetryBackoff)
 	deploymentCreate := workerhandlers.NewDeploymentCreateHandler(r.AppRepo, r.DeploymentRepo, r.Backend, r.DeploymentService, r.Scheduler)
 	deploymentDelete := workerhandlers.NewDeploymentDeleteHandler(r.AppRepo, r.DeploymentRepo, r.Backend, r.DeploymentService)

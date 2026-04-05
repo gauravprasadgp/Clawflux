@@ -1,4 +1,4 @@
--- Performance indexes for ClawPlane
+-- Performance indexes for Clawflux
 -- Safe to run multiple times (IF NOT EXISTS).
 
 -- Apps: fast lookup by tenant

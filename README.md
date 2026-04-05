@@ -1,10 +1,10 @@
-# ClawPlane
+# Clawflux
 
-ClawPlane is the open-source control plane for deploying OpenClaw.
+Clawflux is the open-source control plane for deploying OpenClaw.
 
 It gives OpenClaw a real backend for app lifecycle management, deployments, async workers, API auth, and operator workflows on top of Kubernetes, without dragging in the weight of a full PaaS.
 
-## Why ClawPlane
+## Why Clawflux
 
 - It is purpose-built for deploying OpenClaw, so the repo story is much clearer than a generic "container control plane."
 - It gives you a small, hackable Go codebase instead of a giant platform you need weeks to understand.
@@ -26,7 +26,7 @@ Recommended demo flow for a GIF/video:
 If you want a polished OSS landing page, record that flow and save it as `docs/demo.gif`, then replace this line with:
 
 ```md
-![ClawPlane demo](docs/demo.gif)
+![Clawflux demo](docs/demo.gif)
 ```
 
 ## Quick Start
@@ -94,7 +94,7 @@ curl -X POST http://localhost:8080/v1/apps/<app-id>/deployments \
 
 ## What It Solves
 
-ClawPlane gives OpenClaw a deployable control-plane backend with:
+Clawflux gives OpenClaw a deployable control-plane backend with:
 
 - Multi-tenant app management
 - Deployment orchestration with async workers
@@ -185,7 +185,7 @@ Current endpoints include:
 
 ## Current Status
 
-ClawPlane is a strong backend scaffold, not a finished hosted platform yet.
+Clawflux is a strong backend scaffold, not a finished hosted platform yet.
 
 Already here:
 
@@ -206,7 +206,7 @@ Still worth building next:
 
 ## Contributing
 
-Contributions are welcome if you want to help push ClawPlane toward a real OSS control plane.
+Contributions are welcome if you want to help push Clawflux toward a real OSS control plane.
 
 Good first areas:
 

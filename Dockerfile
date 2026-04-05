@@ -1,5 +1,5 @@
 # ────────────────────────────────────────────────────────────────────────────
-# ClawPlane — multi-stage Dockerfile
+# Clawflux — multi-stage Dockerfile
 #
 # Stages:
 #   builder  – compiles both binaries (api + worker) with version injection
@@ -54,13 +54,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 FROM alpine:${ALPINE_VERSION} AS api
 
 RUN apk add --no-cache ca-certificates tzdata && \
-    addgroup -S clawplane && adduser -S -G clawplane clawplane
+    addgroup -S clawflux && adduser -S -G clawflux clawflux
 
 WORKDIR /app
 COPY --from=builder /out/api      ./api
 COPY --from=builder /out/migrate  ./migrate
 
-USER clawplane
+USER clawflux
 EXPOSE 8080
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
@@ -72,11 +72,11 @@ ENTRYPOINT ["./api"]
 FROM alpine:${ALPINE_VERSION} AS worker
 
 RUN apk add --no-cache ca-certificates tzdata && \
-    addgroup -S clawplane && adduser -S -G clawplane clawplane
+    addgroup -S clawflux && adduser -S -G clawflux clawflux
 
 WORKDIR /app
 COPY --from=builder /out/worker ./worker
 
-USER clawplane
+USER clawflux
 
 ENTRYPOINT ["./worker"]

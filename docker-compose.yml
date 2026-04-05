@@ -2,11 +2,11 @@ version: "3.9"
 
 # ── Shared env for both application services ──────────────────────────────────
 x-app-env: &app-env
-  DATABASE_URL: postgres://clawplane:clawplane@postgres:5432/clawplane?sslmode=disable
+  DATABASE_URL: postgres://clawflux:clawflux@postgres:5432/clawflux?sslmode=disable
   REPOSITORY_DRIVER: postgres
   REDIS_ADDR: redis:6379
   REDIS_PASSWORD: ""
-  REDIS_QUEUE: clawplane:jobs
+  REDIS_QUEUE: clawflux:jobs
   LOG_LEVEL: info
   DEVELOPMENT_AUTH: "false"
   DEFAULT_INGRESS_HOST: apps.localhost
@@ -22,15 +22,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: clawplane
-      POSTGRES_USER: clawplane
-      POSTGRES_PASSWORD: clawplane
+      POSTGRES_DB: clawflux
+      POSTGRES_USER: clawflux
+      POSTGRES_PASSWORD: clawflux
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U clawplane"]
+      test: ["CMD-SHELL", "pg_isready -U clawflux"]
       interval: 5s
       timeout: 5s
       retries: 10

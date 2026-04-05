@@ -33,7 +33,7 @@ func LoadConfig() Config {
 		RepositoryDriver:   env("REPOSITORY_DRIVER", "postgres"),
 		RedisAddr:          env("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword:      env("REDIS_PASSWORD", ""),
-		RedisQueue:         env("REDIS_QUEUE", "clawplane:jobs"),
+		RedisQueue:         env("REDIS_QUEUE", "clawflux:jobs"),
 		JobMaxAttempts:     envInt("JOB_MAX_ATTEMPTS", 5),
 		JobRetryBackoff:    envDuration("JOB_RETRY_BACKOFF", 2*time.Second),
 		MediumClientID:     env("MEDIUM_CLIENT_ID", ""),

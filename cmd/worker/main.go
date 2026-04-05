@@ -28,7 +28,7 @@ func main() {
 	}
 	defer runtime.Close()
 
-	runtime.Logger.Info("clawplane worker starting", "queue", cfg.RedisQueue)
+	runtime.Logger.Info("clawflux worker starting", "queue", cfg.RedisQueue)
 
 	if err := runtime.Worker().Run(ctx); err != nil && err != context.Canceled {
 		runtime.Logger.Error("worker exited with error", "error", err)

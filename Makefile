@@ -1,4 +1,4 @@
-# ClawPlane Makefile
+# Clawflux Makefile
 # Usage: make <target>
 
 BINARY_API     := bin/api
@@ -91,7 +91,7 @@ infra-up:
 	@echo "==> Starting Postgres and Redis..."
 	docker compose up -d postgres redis
 	@echo "==> Waiting for Postgres..."
-	@until docker compose exec postgres pg_isready -U clawplane > /dev/null 2>&1; do sleep 1; done
+	@until docker compose exec postgres pg_isready -U clawflux > /dev/null 2>&1; do sleep 1; done
 	@echo "==> Waiting for Redis..."
 	@until docker compose exec redis redis-cli ping > /dev/null 2>&1; do sleep 1; done
 	@echo "==> Infrastructure ready."
@@ -129,15 +129,15 @@ docker-build:
 		--target api \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg COMMIT=$(COMMIT) \
-		-t clawplane-api:$(VERSION) \
-		-t clawplane-api:latest \
+		-t clawflux-api:$(VERSION) \
+		-t clawflux-api:latest \
 		.
 	docker build \
 		--target worker \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg COMMIT=$(COMMIT) \
-		-t clawplane-worker:$(VERSION) \
-		-t clawplane-worker:latest \
+		-t clawflux-worker:$(VERSION) \
+		-t clawflux-worker:latest \
 		.
 
 docker-up:
@@ -156,7 +156,7 @@ clean:
 # ── Help ──────────────────────────────────────────────────────────────────────
 help:
 	@echo ""
-	@echo "ClawPlane — available targets:"
+	@echo "Clawflux — available targets:"
 	@echo ""
 	@echo "  Local development"
 	@echo "  -----------------"

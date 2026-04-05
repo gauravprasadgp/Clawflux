@@ -166,10 +166,10 @@ func buildPod(name, namespace string, req domain.BackendDeployRequest) *v1.Pod {
 			Namespace: namespace,
 			Labels: map[string]string{
 				"app.kubernetes.io/name":       trimForKubeName(req.App.Slug),
-				"app.kubernetes.io/managed-by": "clawplane",
-				"clawplane/tenant":             trimForKubeName(req.App.TenantID),
-				"clawplane/app":                trimForKubeName(req.App.ID),
-				"clawplane/deployment":         trimForKubeName(req.Deployment.ID),
+				"app.kubernetes.io/managed-by": "clawflux",
+				"clawflux/tenant":              trimForKubeName(req.App.TenantID),
+				"clawflux/app":                 trimForKubeName(req.App.ID),
+				"clawflux/deployment":          trimForKubeName(req.Deployment.ID),
 			},
 		},
 		Spec: v1.PodSpec{
@@ -192,7 +192,7 @@ func (b *Backend) ensureNamespace(ctx context.Context, ns string) error {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: ns,
 			Labels: map[string]string{
-				"app.kubernetes.io/managed-by": "clawplane",
+				"app.kubernetes.io/managed-by": "clawflux",
 			},
 		},
 	}, metav1.CreateOptions{})

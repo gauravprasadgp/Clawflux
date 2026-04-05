@@ -15,9 +15,9 @@ import (
 
 //go:generate swag init --parseInternal --generalInfo ./cmd/api/main.go --output ./docs/swagger
 
-// @title ClawPlane API
+// @title Clawflux API
 // @version 0.1.0
-// @description Code-first Swagger docs for the current ClawPlane HTTP API.
+// @description Code-first Swagger docs for the current Clawflux HTTP API.
 // @description
 // @description Auth behavior:
 // @description - Most /v1 endpoints accept either X-API-Key or X-User-Email.
@@ -58,7 +58,7 @@ func main() {
 	}
 
 	go func() {
-		runtime.Logger.Info("clawplane api listening", "addr", cfg.HTTPAddr)
+		runtime.Logger.Info("clawflux api listening", "addr", cfg.HTTPAddr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			runtime.Logger.Error("server error", "error", err)
 			os.Exit(1)

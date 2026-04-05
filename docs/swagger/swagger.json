@@ -4,8 +4,8 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "Code-first Swagger docs for the current ClawPlane HTTP API.\n\nAuth behavior:\n- Most /v1 endpoints accept either X-API-Key or X-User-Email.\n- DEVELOPMENT_AUTH=true allows unauthenticated local requests as developer@local.\n- Platform admin endpoints additionally require X-Platform-Admin: true.",
-        "title": "ClawPlane API",
+        "description": "Code-first Swagger docs for the current Clawflux HTTP API.\n\nAuth behavior:\n- Most /v1 endpoints accept either X-API-Key or X-User-Email.\n- DEVELOPMENT_AUTH=true allows unauthenticated local requests as developer@local.\n- Platform admin endpoints additionally require X-Platform-Admin: true.",
+        "title": "Clawflux API",
         "contact": {},
         "version": "0.1.0"
     },
