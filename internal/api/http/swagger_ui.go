@@ -55,7 +55,8 @@ func (r *Router) handleSwaggerAssets(w http.ResponseWriter, req *http.Request) {
 	path := filepath.Join("docs", "swagger", name)
 	if _, err := os.Stat(path); err != nil {
 		writeJSON(w, http.StatusNotFound, ErrorResponse{
-			Error: "swagger asset not found; run `go generate ./cmd/api` first",
+			Code:    "not_found",
+			Message: "swagger asset not found; run `go generate ./cmd/api` first",
 		})
 		return
 	}

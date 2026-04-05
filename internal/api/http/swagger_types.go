@@ -4,9 +4,9 @@ import (
 	"github.com/gauravprasad/clawcontrol/internal/domain"
 )
 
-type ErrorResponse struct {
-	Error string `json:"error"`
-}
+// type ErrorResponse struct {
+// 	Error string `json:"error"`
+// }
 
 type HealthStatusResponse struct {
 	Status string `json:"status"`
