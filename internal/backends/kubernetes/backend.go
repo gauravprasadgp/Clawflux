@@ -221,8 +221,6 @@ func (b *Backend) ensureDenyAllEgress(ctx context.Context, ns string) error {
 	return err
 }
 
-// Shared helpers — also used by manifests.go
-
 func namespaceForTenant(tenantID string) string {
 	return "tenant-" + trimForKubeName(tenantID)
 }
