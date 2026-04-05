@@ -1,0 +1,44 @@
+# ── Build output ─────────────────────────────────────────────────────────────
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# ── Test artifacts ───────────────────────────────────────────────────────────
+*.test
+coverage.out
+coverage.html
+
+# ── Environment / secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Go workspace (Go 1.18+) ─────────────────────────────────────────────────
+go.work
+go.work.sum
+
+# ── OS generated ─────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ── IDE / editor ─────────────────────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+*~
+
+# ── Docker (optional) ────────────────────────────────────────────────────────
+# Uncomment if you mount local volumes that generate state
+# docker-data/
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+*.log
+tmp/
