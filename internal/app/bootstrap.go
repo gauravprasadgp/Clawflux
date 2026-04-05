@@ -124,6 +124,10 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 	adminService := services.NewAdminService(adminRepo, cfg.RepositoryDriver)
 	auditService := services.NewAuditService(auditRepo)
 	healthService := services.NewHealthService(db, queueHealth)
+	backend, err := kubernetes.NewBackend()
+	if err != nil {
+		return nil, fmt.Errorf("init kubernetes backend: %w", err)
+	}
 
 	return &Runtime{
 		Config:            cfg,
@@ -137,7 +141,7 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 		AppService:        appService,
 		DeploymentService: deploymentService,
 		Scheduler:         scheduler,
-		Backend:           kubernetes.NewBackend(),
+		Backend:           backend,
 		Queue:             queue,
 		UserRepo:          userRepo,
 		AuthIdentityRepo:  authIdentityRepo,
