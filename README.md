@@ -309,7 +309,7 @@ See `internal/backends/kubernetes/backend.go` (~600 lines) as the reference.
 
 ## Community
 
-- 🐛 [Issues]((https://github.com/gauravprasadgp/Clawflux/issues))
+- 🐛 [Issues](https://github.com/gauravprasadgp/Clawflux/issues)
 - 💡 [Discussions](https://github.com/gauravprasadgp/Clawflux/discussions)
 
 ---
