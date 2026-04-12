@@ -307,6 +307,15 @@ See `internal/backends/kubernetes/backend.go` (~600 lines) as the reference.
 
 ---
 
+## Community
+
+- 🐛 [Issues]((https://github.com/gauravprasadgp/Clawflux/issues))
+- 💡 [Discussions](https://github.com/gauravprasadgp/Clawflux/discussions)
+
+---
+
 ## License
 
-MIT. Build something good.
+MIT — see [LICENSE](LICENSE).
+
+Built by @gauravprasadgp.
