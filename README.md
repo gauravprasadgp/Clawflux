@@ -190,6 +190,7 @@ cd frontend
 npm install
 npm run dev   # http://localhost:5173, proxied to :8080
 ```
+<img width="1507" height="860" alt="image" src="https://github.com/user-attachments/assets/16a545f9-77e0-41da-b97d-10a6beef95e0" />
 
 ---
 
