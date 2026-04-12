@@ -118,6 +118,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/admin/instances": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "List all deployed OpenClaw instances across all tenants",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Admin email",
+                        "name": "X-User-Email",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true",
+                        "name": "X-Platform-Admin",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.AdminInstanceListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/admin/openclaw/deploy": {
             "post": {
                 "consumes": [
@@ -1415,6 +1462,20 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.AdminInstance": {
+            "type": "object",
+            "properties": {
+                "app": {
+                    "$ref": "#/definitions/domain.App"
+                },
+                "deployment": {
+                    "$ref": "#/definitions/domain.Deployment"
+                },
+                "user_email": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.AdminSummary": {
             "type": "object",
             "properties": {
@@ -1742,6 +1803,17 @@ const docTemplate = `{
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/domain.APIKey"
+                    }
+                }
+            }
+        },
+        "http.AdminInstanceListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.AdminInstance"
                     }
                 }
             }

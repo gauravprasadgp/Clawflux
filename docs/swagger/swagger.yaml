@@ -36,6 +36,15 @@ definitions:
       user_id:
         type: string
     type: object
+  domain.AdminInstance:
+    properties:
+      app:
+        $ref: '#/definitions/domain.App'
+      deployment:
+        $ref: '#/definitions/domain.Deployment'
+      user_email:
+        type: string
+    type: object
   domain.AdminSummary:
     properties:
       apps:
@@ -259,6 +268,13 @@ definitions:
           $ref: '#/definitions/domain.APIKey'
         type: array
     type: object
+  http.AdminInstanceListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/domain.AdminInstance'
+        type: array
+    type: object
   http.AppListResponse:
     properties:
       items:
@@ -471,6 +487,37 @@ paths:
       summary: List tenant audit logs
       tags:
       - Audit
+  /v1/admin/instances:
+    get:
+      parameters:
+      - description: Admin email
+        in: header
+        name: X-User-Email
+        required: true
+        type: string
+      - description: Set to true
+        in: header
+        name: X-Platform-Admin
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AdminInstanceListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List all deployed OpenClaw instances across all tenants
+      tags:
+      - Admin
   /v1/admin/openclaw/deploy:
     post:
       consumes:

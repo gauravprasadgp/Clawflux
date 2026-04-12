@@ -74,17 +74,27 @@ migrate-up: migrate
 # Ctrl+C stops both processes and optionally leaves infra running.
 dev: build infra-up migrate-up
 	@echo ""
-	@echo "  API     → http://localhost:8080"
-	@echo "  Swagger → http://localhost:8080/swagger"
-	@echo "  Health  → http://localhost:8080/healthz"
-	@echo "  Ready   → http://localhost:8080/readyz"
+	@echo "  API     -> http://localhost:8080"
+	@echo "  UI      -> http://localhost:5173  (Vite, hot reload)"
+	@echo "  Swagger -> http://localhost:8080/swagger"
+	@echo "  Health  -> http://localhost:8080/healthz"
 	@echo ""
-	@echo "Press Ctrl+C to stop api and worker (infra keeps running)."
+	@echo "Press Ctrl+C to stop everything (infra keeps running)."
 	@echo ""
-	@trap 'kill $$API_PID $$WORKER_PID 2>/dev/null; echo "Stopped."; exit 0' INT TERM; \
+	@cd frontend && npm install --silent 2>/dev/null; cd ..
+	@trap 'kill $$API_PID $$WORKER_PID $$UI_PID 2>/dev/null; echo "Stopped."; exit 0' INT TERM; \
 	  ./$(BINARY_API) & API_PID=$$!; \
 	  ./$(BINARY_WORKER) & WORKER_PID=$$!; \
-	  wait $$API_PID $$WORKER_PID
+	  (cd frontend && npm run dev -- --host) & UI_PID=$$!; \
+	  wait $$API_PID $$WORKER_PID $$UI_PID
+
+# Run only the Go backend
+dev-api: build infra-up migrate-up
+	./$(BINARY_API)
+
+# Run only the Vite frontend (API must already be running on :8080)
+dev-ui:
+	cd frontend && npm install --silent && npm run dev
 
 # ── Infrastructure only (Postgres + Redis) ────────────────────────────────────
 infra-up:

@@ -170,12 +170,47 @@ See [docs/architecture.md](docs/architecture.md) for the fuller breakdown.
 
 ## Developer Experience
 
-- Swagger generation: `go generate ./cmd/api`
+### One command to start everything
+
+```bash
+make dev
+```
+
+This starts Postgres + Redis, runs migrations, and launches three processes together:
+
+| Process | URL | Notes |
+|---|---|---|
+| Go API server | http://localhost:8080 | REST API + Swagger |
+| Vite dev server | http://localhost:5173 | React UI, hot reload |
+| Background worker | — | Processes deployment jobs |
+
+The frontend automatically proxies `/v1` and `/admin` to the API server — no CORS config needed.
+
+### Individual targets
+
+```bash
+make dev-api    # Go backend only (API + worker)
+make dev-ui     # Vite frontend only (API must be running)
+make infra-up   # Postgres + Redis only
+make test       # Run tests
+make lint       # Format + vet + golangci-lint
+```
+
+### Frontend (React + Vite)
+
+The frontend lives in `frontend/` and is a standalone Vite + React app.
+Contributors can work on it independently:
+
+```bash
+cd frontend
+npm install
+npm run dev     # starts at http://localhost:5173
+```
+
+Proxy config in `frontend/vite.config.js` forwards `/v1` and `/admin` to `:8080`.
+
 - Swagger UI: `http://localhost:8080/swagger/`
-- Full local stack: `make dev`
-- Infra only: `make infra-up`
-- Tests: `make test`
-- Lint: `make lint`
+- Swagger generation: `go generate ./cmd/api`
 
 ## API Surface
 
