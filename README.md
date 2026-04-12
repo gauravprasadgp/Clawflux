@@ -1,60 +1,68 @@
 # Clawflux
 
-Clawflux is the open-source control plane for deploying OpenClaw.
+> **The open-source control plane for deploying OpenClaw at scale.**
 
-It gives OpenClaw a real backend for app lifecycle management, deployments, async workers, API auth, and operator workflows on top of Kubernetes, without dragging in the weight of a full PaaS.
+Clawflux is the missing backend between "I want to run OpenClaw for my users" and "I have a production-grade multi-tenant deployment system." It handles app lifecycle, async deployment orchestration, API auth, audit logging, and a React admin UI — so you can focus on building with OpenClaw instead of plumbing.
 
-## Why Clawflux
+---
 
-- It is purpose-built for deploying OpenClaw, so the repo story is much clearer than a generic "container control plane."
-- It gives you a small, hackable Go codebase instead of a giant platform you need weeks to understand.
-- It separates API, scheduling, queueing, and workers cleanly, so you can extend one part without rewriting the whole system.
+## Why Clawflux?
 
-## Demo
+Most control planes are either too big (full PaaS, weeks to understand) or too small (a shell script that breaks at scale). Clawflux hits the sweet spot:
 
-Swagger UI is available at `http://localhost:8080/swagger/` after startup, which makes the current API easy to explore live.
+- **Purpose-built for OpenClaw** — not a generic container scheduler. It speaks OpenClaw's language natively: gateway tokens, workspace PVCs, provider API keys, AGENTS.md injection.
+- **Small and hackable** — ~4k lines of Go, clean layer separation, easy to read and extend.
+- **Production-ready architecture** — async workers, retries, deployment event history, audit logs, tenant isolation.
+- **One command to run everything** — `make dev` starts the API, worker, and React UI together.
 
-Recommended demo flow for a GIF/video:
+---
 
-1. Start the stack with `make dev`
-2. Open `http://localhost:8080/swagger/`
-3. Create an API key with `X-User-Email`
-4. Create an OpenClaw app definition
-5. Trigger an OpenClaw deployment
-6. Watch deployment status and events update
+## What it does today
 
-If you want a polished OSS landing page, record that flow and save it as `docs/demo.gif`, then replace this line with:
-
-```md
-![Clawflux demo](docs/demo.gif)
 ```
+You → Admin UI → POST /v1/admin/openclaw/deploy
+                       ↓
+               Creates user + tenant
+                       ↓
+               Queues deployment job
+                       ↓
+               Worker picks it up
+                       ↓
+               Kubernetes: Namespace + Deployment + Service + Ingress
+                           + PVC (workspace) + ConfigMap + Secret
+                       ↓
+               OpenClaw is running for that user ✓
+```
+
+Every deployment is tracked with status, events, and audit logs. Retry, cancel, or delete from the UI or API.
+
+---
 
 ## Quick Start
 
-Prerequisites:
-
-- Go 1.22+
-- Docker / Docker Compose
-
-Copy-paste local setup:
+**Prerequisites:** Go 1.22+, Docker, Node 18+
 
 ```bash
+git clone https://github.com/gauravprasadgp/clawflux.git
+cd clawflux
 cp .env.example .env
 go install github.com/swaggo/swag/cmd/swag@latest
-go generate ./cmd/api
 make dev
 ```
 
-That starts:
+That's it. Three things start:
 
-- API: `http://localhost:8080`
-- Swagger UI: `http://localhost:8080/swagger/`
-- Admin UI: `http://localhost:8080/admin/`
-- Health: `http://localhost:8080/healthz`
-- Readiness: `http://localhost:8080/readyz`
+| What | Where | Notes |
+|---|---|---|
+| API server | http://localhost:8080 | REST API + Swagger UI |
+| React admin UI | http://localhost:5173 | Hot reload, proxied to API |
+| Background worker | — | Processes deployment jobs async |
 
-Create an API key:
+Open **http://localhost:5173** and set your admin email to get started.
 
+### Try it via curl
+
+**Create an API key:**
 ```bash
 curl -X POST http://localhost:8080/v1/api-keys \
   -H 'Content-Type: application/json' \
@@ -63,200 +71,241 @@ curl -X POST http://localhost:8080/v1/api-keys \
   -d '{"name":"local-cli"}'
 ```
 
-Create an app:
-
+**Deploy OpenClaw for a user (admin endpoint):**
 ```bash
-curl -X POST http://localhost:8080/v1/apps \
+curl -X POST http://localhost:8080/v1/admin/openclaw/deploy \
   -H 'Content-Type: application/json' \
-  -H 'X-User-Email: alice@example.com' \
+  -H 'X-User-Email: admin@example.com' \
+  -H 'X-Platform-Admin: true' \
   -d '{
-    "name":"openclaw",
-    "slug":"openclaw",
-    "config":{
-      "image":"ghcr.io/openclaw/openclaw:latest",
-      "port":18789,
-      "env":{},
-      "replicas":1,
-      "cpu_request":"250m",
-      "memory_request":"256Mi",
-      "cpu_limit":"500m",
-      "memory_limit":"512Mi",
-      "public":true,
-      "openclaw":{
-        "enabled":true,
-        "gateway_bind_address":"0.0.0.0",
-        "gateway_port":18789,
-        "workspace_storage":"10Gi",
-        "provider_api_keys":{
-          "OPENAI_API_KEY":"<your-key>"
-        }
-      }
-    }
+    "user_email": "alice@example.com",
+    "user_name": "Alice",
+    "image": "ghcr.io/openclaw/openclaw:latest",
+    "gateway_port": 18789,
+    "workspace_storage": "10Gi",
+    "provider_api_keys": {
+      "OPENAI_API_KEY": "sk-..."
+    },
+    "public": true,
+    "domain": "alice.yourclaw.io"
   }'
 ```
 
-Create an OpenClaw deployment:
-
+**Check deployment status:**
 ```bash
-curl -X POST http://localhost:8080/v1/apps/<app-id>/deployments \
+curl http://localhost:8080/v1/deployments/<deployment-id> \
   -H 'X-User-Email: alice@example.com'
 ```
 
-## What It Solves
+Full API docs at **http://localhost:8080/swagger/**.
 
-Clawflux gives OpenClaw a deployable control-plane backend with:
-
-- Multi-tenant app management
-- Deployment orchestration with async workers
-- Deployment event history
-- API key auth for automation and backend clients
-- Admin and audit endpoints for operators
-- Kubernetes-first control-plane workflows
-
-It is especially useful if you want to build:
-
-- A hosted OpenClaw offering
-- A self-hosted OpenClaw deployment backend
-- A control plane around OpenClaw environments and automation
+---
 
 ## Architecture
 
-```text
-                         ┌─────────────────────┐
-                         │   Admin / Future UI │
-                         └──────────┬──────────┘
+```
+                         ┌──────────────────────┐
+                         │   React Admin UI     │
+                         │  (frontend/, :5173)  │
+                         └──────────┬───────────┘
+                                    │ HTTP
+                         ┌──────────▼───────────┐
+                         │      HTTP API        │
+                         │   cmd/api + router   │
+                         └──────────┬───────────┘
                                     │
-                         ┌──────────▼──────────┐
-                         │      HTTP API       │
-                         │   cmd/api + router  │
-                         └──────────┬──────────┘
-                                    │
-        ┌───────────────┬───────────┼───────────────┬───────────────┐
-        │               │           │               │               │
- ┌──────▼──────┐ ┌──────▼──────┐ ┌──▼───────────┐ ┌─▼────────────┐ ┌▼─────────────┐
- │ Auth / IAM  │ │ App Service │ │ Deploy Svc   │ │ Admin / Audit│ │ Health Svc   │
- │ OAuth + key │ │ apps config │ │ desired state│ │ ops endpoints│ │ readiness    │
- └──────┬──────┘ └──────┬──────┘ └──────┬───────┘ └────┬─────────┘ └────┬─────────┘
-        │               │                │               │                │
-        └───────────────┴────────────────┼───────────────┴────────────────┘
-                                         │
-                              ┌──────────▼──────────┐
-                              │ Repositories        │
-                              │ Postgres or memory  │
-                              └──────────┬──────────┘
-                                         │
-                              ┌──────────▼──────────┐
-                              │ Scheduler Service   │
-                              │ enqueue job intent  │
-                              └──────────┬──────────┘
-                                         │
-                              ┌──────────▼──────────┐
-                              │ Redis Job Queue     │
-                              │ minimal RESP client │
-                              └──────────┬──────────┘
-                                         │
-                              ┌──────────▼──────────┐
-                              │ Worker              │
-                              │ cmd/worker          │
-                              └──────────┬──────────┘
-                                         │
-                              ┌──────────▼──────────┐
-                              │ Deployment Backend  │
-                              │ Kubernetes adapter  │
-                              └─────────────────────┘
+        ┌──────────────┬────────────┼────────────┬──────────────┐
+        │              │            │            │              │
+   ┌────▼────┐   ┌─────▼─────┐ ┌───▼──────┐ ┌──▼──────┐ ┌────▼─────┐
+   │  Auth   │   │    App    │ │  Deploy  │ │  Admin  │ │  Health  │
+   │IAM+keys │   │  Service  │ │ Service  │ │  Audit  │ │Readiness │
+   └────┬────┘   └─────┬─────┘ └───┬──────┘ └──┬──────┘ └────┬─────┘
+        │              │           │            │              │
+        └──────────────┴───────────┼────────────┴──────────────┘
+                                   │
+                        ┌──────────▼──────────┐
+                        │    Repositories     │
+                        │  Postgres | memory  │
+                        └──────────┬──────────┘
+                                   │
+                        ┌──────────▼──────────┐
+                        │  Scheduler Service  │
+                        │  enqueue job intent │
+                        └──────────┬──────────┘
+                                   │
+                        ┌──────────▼──────────┐
+                        │   Redis Job Queue   │
+                        └──────────┬──────────┘
+                                   │
+                        ┌──────────▼──────────┐
+                        │  Worker (cmd/worker)│
+                        └──────────┬──────────┘
+                                   │
+                        ┌──────────▼──────────┐
+                        │  Deployment Backend │
+                        │  Kubernetes adapter │
+                        └─────────────────────┘
 ```
 
-See [docs/architecture.md](docs/architecture.md) for the fuller breakdown.
+See [docs/architecture.md](docs/architecture.md) for the full breakdown.
 
-## Developer Experience
+### Repo layout
 
-### One command to start everything
-
-```bash
-make dev
+```
+cmd/
+  api/        → HTTP server entrypoint
+  worker/     → Job queue consumer entrypoint
+  migrate/    → Database migration runner
+internal/
+  api/http/   → Router, handlers, middleware, admin UI
+  services/   → Business logic (app, deployment, auth, admin)
+  domain/     → Types, interfaces, errors
+  backends/
+    kubernetes/ → K8s Deployment/Service/Ingress/PVC reconciliation
+  repositories/
+    postgres/   → PostgreSQL implementations
+    memory/     → In-memory implementations (tests / no-DB dev)
+  queue/redis/  → Minimal Redis RESP client for job queue
+  worker/       → Consumer loop + job handlers
+frontend/       → React + Vite admin UI
+migrations/     → SQL migration files
+docs/           → Architecture docs + Swagger output
 ```
 
-This starts Postgres + Redis, runs migrations, and launches three processes together:
+---
 
-| Process | URL | Notes |
-|---|---|---|
-| Go API server | http://localhost:8080 | REST API + Swagger |
-| Vite dev server | http://localhost:5173 | React UI, hot reload |
-| Background worker | — | Processes deployment jobs |
+## Admin UI
 
-The frontend automatically proxies `/v1` and `/admin` to the API server — no CORS config needed.
+The React admin UI (http://localhost:5173 in dev) gives you a full control plane in the browser:
 
-### Individual targets
+- **Dashboard** — live table of all deployed OpenClaw instances across all tenants, with status badges, namespace, and one-click drill-down
+- **Instance detail** — deployment info, events log, Retry / Cancel / Delete
+- **Deploy** — form to provision a user and deploy OpenClaw to Kubernetes in one click
+- **Users** — provision users, view audit logs
 
-```bash
-make dev-api    # Go backend only (API + worker)
-make dev-ui     # Vite frontend only (API must be running)
-make infra-up   # Postgres + Redis only
-make test       # Run tests
-make lint       # Format + vet + golangci-lint
-```
-
-### Frontend (React + Vite)
-
-The frontend lives in `frontend/` and is a standalone Vite + React app.
-Contributors can work on it independently:
+The frontend is a standalone Vite + React app in `frontend/`. Contributors can work on it without touching Go:
 
 ```bash
 cd frontend
 npm install
-npm run dev     # starts at http://localhost:5173
+npm run dev   # http://localhost:5173, proxied to :8080
 ```
 
-Proxy config in `frontend/vite.config.js` forwards `/v1` and `/admin` to `:8080`.
+---
 
-- Swagger UI: `http://localhost:8080/swagger/`
-- Swagger generation: `go generate ./cmd/api`
+## Deployment Backends
 
-## API Surface
+Clawflux is backend-agnostic by design. The `domain.DeploymentBackend` interface has three methods: `Submit`, `Delete`, `GetStatus`. Swap the backend, keep everything else.
 
-Current endpoints include:
+### Currently supported
 
-- `/v1/me`
-- `/v1/auth/providers`
-- `/v1/auth/medium/login`
-- `/v1/auth/medium/callback`
-- `/v1/api-keys`
-- `/v1/apps`
-- `/v1/apps/{appID}/deployments`
-- `/v1/deployments/{deploymentID}`
-- `/v1/deployments/{deploymentID}/events`
-- `/v1/admin/summary`
-- `/v1/admin/audit-logs`
+| Backend | Status | Notes |
+|---|---|---|
+| **Kubernetes** | ✅ Production-ready | Namespace-per-tenant, Deployment + Service + Ingress + PVC + Secret |
 
-## Current Status
+### Roadmap
 
-Clawflux is a strong backend scaffold, not a finished hosted platform yet.
+| Backend | Status | Notes |
+|---|---|---|
+| **Docker Compose** | 🔜 Planned | Single-machine deployments, great for self-hosters |
+| **AWS ECS / Fargate** | 🔜 Planned | Serverless containers, no K8s required |
+| **Fly.io** | 🔜 Planned | `flyctl` wrapper, fast global deploys |
+| **Railway** | 🔜 Planned | Simple PaaS API integration |
+| **DigitalOcean App Platform** | 🔜 Planned | Managed containers on DO |
+| **Nomad** | 🔜 Planned | HashiCorp Nomad for teams already running it |
+| **Bare metal / SSH** | 🔜 Planned | Deploy via SSH + systemd for the minimalists |
 
-Already here:
+Want to add a backend? It's just one interface — see `internal/backends/kubernetes/backend.go` as the reference implementation.
 
-- PostgreSQL and in-memory repositories
-- Redis-backed job queue
-- Worker-driven deployment flow
-- Deployment retries and sync jobs
-- Swagger docs and live API UI
-- Admin UI for user provisioning and OpenClaw deployment
-- Admin, audit, health, and API key endpoints
-- Kubernetes deployment/service/ingress reconciliation with OpenClaw config + secret + workspace PVC support
+---
 
-Still worth building next:
+## What's already built
 
-- Runtime logs and streaming deployment feedback
-- Dead-letter queue behavior
-- richer RBAC and SSO hardening for production
+- ✅ Multi-tenant app and deployment management
+- ✅ Async worker pipeline with retries and sync jobs
+- ✅ Kubernetes backend — full reconciliation (Deployment, Service, Ingress, PVC, ConfigMap, Secret)
+- ✅ Namespace-per-tenant isolation with network policies
+- ✅ OpenClaw-native config: gateway token, workspace PVC, provider API keys, AGENTS.md injection
+- ✅ API key auth with prefix/hash storage
+- ✅ Admin REST API + React control plane UI
+- ✅ Deployment events, audit logs, health + readiness endpoints
+- ✅ Swagger docs with live UI
+- ✅ PostgreSQL + in-memory repositories (switchable)
+- ✅ `make dev` — one command to start everything
+
+---
+
+## Roadmap
+
+### Near-term
+- [ ] **Real-time deployment logs** — stream pod logs through the API and into the UI
+- [ ] **Dead-letter queue** — surface permanently failed jobs with alerting
+- [ ] **Webhook notifications** — POST deployment status events to external systems
+- [ ] **Docker Compose backend** — for single-machine or homelab deployments
+- [ ] **Richer RBAC** — per-tenant roles, scoped API keys
+
+### Medium-term
+- [ ] **AWS ECS / Fargate backend**
+- [ ] **Fly.io backend**
+- [ ] **SSO / OAuth hardening** — production-ready auth beyond dev headers
+- [ ] **Deployment diff view** — show what changed between deployments
+- [ ] **Usage metrics** — CPU/memory per instance pulled from K8s metrics-server
+- [ ] **Billing hooks** — pluggable usage events for hosted offerings
+
+### Longer-term
+- [ ] **Multi-cluster support** — deploy to different K8s clusters per region/tenant
+- [ ] **GitOps mode** — trigger deployments from git push via webhook
+- [ ] **Terraform provider** — manage Clawflux resources as infrastructure
+- [ ] **CLI** — `clawflux deploy`, `clawflux status`, `clawflux logs`
+
+---
 
 ## Contributing
 
-Contributions are welcome if you want to help push Clawflux toward a real OSS control plane.
+Clawflux is early-stage and contributions are genuinely welcome. The codebase is small, the patterns are consistent, and there are plenty of well-scoped things to work on.
 
-Good first areas:
+### Good first issues
 
-- Kubernetes backend reconciliation
-- richer deployment status syncing
-- UI/dashboard
-- DX improvements for local setup
-- tests around queue and worker behavior
+| Area | What to do |
+|---|---|
+| **Tests** | Add unit tests for `services/` — currently only `internal/worker` is covered |
+| **Docker Compose backend** | Implement `domain.DeploymentBackend` using `docker compose` |
+| **Deployment log streaming** | Add `GET /v1/deployments/{id}/logs` that tails pod logs via K8s API |
+| **Frontend polish** | Improve the React UI — dark mode polish, mobile layout, loading states |
+| **Dead-letter queue** | Surface jobs that exceeded max attempts with a `GET /v1/admin/dead-letters` endpoint |
+| **Webhook notifications** | `POST /v1/apps/{id}/webhooks` + fan-out on deployment status change |
+| **Docs** | Architecture deep-dives, deployment guides, backend implementation walkthrough |
+
+### How to contribute
+
+1. Fork the repo and create a branch: `git checkout -b feat/your-feature`
+2. Make your changes — keep Go style consistent (`go fmt`, `go vet`)
+3. Add tests where it makes sense
+4. Open a PR with a clear description of what and why
+
+### Dev workflow
+
+```bash
+make dev          # start everything (API + worker + UI)
+make test         # run tests
+make lint         # format + vet + golangci-lint
+make swag         # regenerate Swagger docs after changing annotations
+```
+
+Backend changes: edit Go files → server auto-restarts (or `make dev-api`).  
+Frontend changes: edit `frontend/src/` → Vite hot-reloads instantly.
+
+### Adding a new deployment backend
+
+1. Create `internal/backends/<name>/backend.go`
+2. Implement the `domain.DeploymentBackend` interface (3 methods: `Submit`, `Delete`, `GetStatus`)
+3. Wire it up in `internal/app/bootstrap.go` behind a config flag
+4. Add a row to the backends table in this README
+
+See `internal/backends/kubernetes/backend.go` (~600 lines) as the reference.
+
+---
+
+## License
+
+MIT. Build something good.
