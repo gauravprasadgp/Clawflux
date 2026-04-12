@@ -50,6 +50,35 @@ Swagger UI will then be available at:
 http://localhost:8080/swagger/
 ```
 
+Admin UI is available at:
+
+```text
+http://localhost:8080/admin/
+```
+
+Example admin OpenClaw deploy API call:
+
+```bash
+curl -X POST http://localhost:8080/v1/admin/openclaw/deploy \
+  -H 'Content-Type: application/json' \
+  -H 'X-User-Email: admin@example.com' \
+  -H 'X-Platform-Admin: true' \
+  -d '{
+    "user_email":"alice@example.com",
+    "user_name":"Alice",
+    "app_name":"openclaw",
+    "app_slug":"openclaw",
+    "image":"ghcr.io/openclaw/openclaw:latest",
+    "replicas":1,
+    "public":true,
+    "domain":"openclaw.example.com",
+    "gateway_bind_address":"0.0.0.0",
+    "gateway_port":18789,
+    "workspace_storage":"10Gi",
+    "provider_api_keys":{"OPENAI_API_KEY":"<key>"}
+  }'
+```
+
 ## Start worker
 
 ```bash

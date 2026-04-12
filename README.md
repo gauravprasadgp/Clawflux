@@ -49,6 +49,7 @@ That starts:
 
 - API: `http://localhost:8080`
 - Swagger UI: `http://localhost:8080/swagger/`
+- Admin UI: `http://localhost:8080/admin/`
 - Health: `http://localhost:8080/healthz`
 - Readiness: `http://localhost:8080/readyz`
 
@@ -73,14 +74,23 @@ curl -X POST http://localhost:8080/v1/apps \
     "slug":"openclaw",
     "config":{
       "image":"ghcr.io/openclaw/openclaw:latest",
-      "port":3000,
+      "port":18789,
       "env":{},
       "replicas":1,
       "cpu_request":"250m",
       "memory_request":"256Mi",
       "cpu_limit":"500m",
       "memory_limit":"512Mi",
-      "public":true
+      "public":true,
+      "openclaw":{
+        "enabled":true,
+        "gateway_bind_address":"0.0.0.0",
+        "gateway_port":18789,
+        "workspace_storage":"10Gi",
+        "provider_api_keys":{
+          "OPENAI_API_KEY":"<your-key>"
+        }
+      }
     }
   }'
 ```
@@ -194,15 +204,15 @@ Already here:
 - Worker-driven deployment flow
 - Deployment retries and sync jobs
 - Swagger docs and live API UI
+- Admin UI for user provisioning and OpenClaw deployment
 - Admin, audit, health, and API key endpoints
+- Kubernetes deployment/service/ingress reconciliation with OpenClaw config + secret + workspace PVC support
 
 Still worth building next:
 
-- Real Kubernetes reconciliation with `client-go`
-- Secret management
 - Runtime logs and streaming deployment feedback
 - Dead-letter queue behavior
-- A dedicated web UI
+- richer RBAC and SSO hardening for production
 
 ## Contributing
 

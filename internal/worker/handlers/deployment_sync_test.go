@@ -58,12 +58,12 @@ func TestDeploymentSyncHandlerUpdatesStatusAndCurrentDeployment(t *testing.T) {
 	}
 
 	deployment := &domain.Deployment{
-		ID:        "dep_1",
-		TenantID:  "tenant_1",
-		AppID:     app.ID,
-		Version:   1,
-		Status:    domain.DeploymentStatusProvisioning,
-		Backend:   "kubernetes",
+		ID:       "dep_1",
+		TenantID: "tenant_1",
+		AppID:    app.ID,
+		Version:  1,
+		Status:   domain.DeploymentStatusProvisioning,
+		Backend:  "kubernetes",
 		BackendRef: domain.BackendRef{
 			Namespace:  "tenant-1",
 			Deployment: "demo-v1",
@@ -82,7 +82,7 @@ func TestDeploymentSyncHandlerUpdatesStatusAndCurrentDeployment(t *testing.T) {
 			Reason: "deployment ready",
 			Ref:    deployment.BackendRef,
 		},
-	}, service)
+	}, service, noopScheduler{})
 
 	err := handler.Handle(context.Background(), domain.Job{
 		ID:           "job_1",

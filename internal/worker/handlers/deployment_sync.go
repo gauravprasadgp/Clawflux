@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"time"
 
 	"github.com/gauravprasad/clawcontrol/internal/domain"
 )
@@ -10,6 +11,7 @@ type DeploymentSyncHandler struct {
 	apps        domain.AppRepository
 	deployments domain.DeploymentRepository
 	backend     domain.DeploymentBackend
+	scheduler   domain.Scheduler
 	service     interface {
 		MarkDeploymentStatus(ctx context.Context, deployment *domain.Deployment, status domain.DeploymentStatus, reason string) error
 	}
@@ -17,11 +19,12 @@ type DeploymentSyncHandler struct {
 
 func NewDeploymentSyncHandler(apps domain.AppRepository, deployments domain.DeploymentRepository, backend domain.DeploymentBackend, service interface {
 	MarkDeploymentStatus(ctx context.Context, deployment *domain.Deployment, status domain.DeploymentStatus, reason string) error
-}) *DeploymentSyncHandler {
+}, scheduler domain.Scheduler) *DeploymentSyncHandler {
 	return &DeploymentSyncHandler{
 		apps:        apps,
 		deployments: deployments,
 		backend:     backend,
+		scheduler:   scheduler,
 		service:     service,
 	}
 }
@@ -44,6 +47,11 @@ func (h *DeploymentSyncHandler) Handle(ctx context.Context, job domain.Job) erro
 	deployment.BackendRef = status.Ref
 	if err := h.service.MarkDeploymentStatus(ctx, deployment, status.Status, status.Reason); err != nil {
 		return err
+	}
+	if status.Status == domain.DeploymentStatusProvisioning {
+		// Current queue does not support delayed jobs, so pause briefly before re-queueing.
+		time.Sleep(2 * time.Second)
+		return h.scheduler.ScheduleSync(ctx, deployment)
 	}
 	if status.Status != domain.DeploymentStatusRunning {
 		return nil

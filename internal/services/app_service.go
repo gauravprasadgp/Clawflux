@@ -92,6 +92,36 @@ func normalizeSlug(in string) string {
 }
 
 func normalizeConfig(cfg domain.AppConfig) domain.AppConfig {
+	isOpenClaw := cfg.OpenClaw != nil || strings.Contains(strings.ToLower(cfg.Image), "openclaw")
+	if isOpenClaw {
+		if cfg.OpenClaw == nil {
+			cfg.OpenClaw = &domain.OpenClawConfig{Enabled: true}
+		}
+		if !cfg.OpenClaw.Enabled {
+			cfg.OpenClaw.Enabled = true
+		}
+		if cfg.Image == "" {
+			cfg.Image = "ghcr.io/openclaw/openclaw:latest"
+		}
+		if cfg.Port == 0 {
+			cfg.Port = 18789
+		}
+		if cfg.OpenClaw.GatewayPort == 0 {
+			cfg.OpenClaw.GatewayPort = 18789
+		}
+		if cfg.OpenClaw.GatewayBindAddress == "" {
+			cfg.OpenClaw.GatewayBindAddress = "0.0.0.0"
+		}
+		if cfg.OpenClaw.WorkspaceStorage == "" {
+			cfg.OpenClaw.WorkspaceStorage = "10Gi"
+		}
+		if cfg.OpenClaw.ProviderAPIKeys == nil {
+			cfg.OpenClaw.ProviderAPIKeys = map[string]string{}
+		}
+		if cfg.OpenClaw.ExtraEnv == nil {
+			cfg.OpenClaw.ExtraEnv = map[string]string{}
+		}
+	}
 	if cfg.Port == 0 {
 		cfg.Port = 3000
 	}
@@ -113,5 +143,6 @@ func normalizeConfig(cfg domain.AppConfig) domain.AppConfig {
 	if cfg.Env == nil {
 		cfg.Env = map[string]string{}
 	}
+
 	return cfg
 }

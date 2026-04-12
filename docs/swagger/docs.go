@@ -118,6 +118,71 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/admin/openclaw/deploy": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Deploy OpenClaw for a target user",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Admin email",
+                        "name": "X-User-Email",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true",
+                        "name": "X-Platform-Admin",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "OpenClaw deployment payload",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/http.adminDeployOpenClawInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/http.adminDeployOpenClawResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/admin/summary": {
             "get": {
                 "produces": [
@@ -158,6 +223,71 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/domain.AdminSummary"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/users": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Provision a user as platform admin",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Admin email",
+                        "name": "X-User-Email",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true",
+                        "name": "X-Platform-Admin",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "User provision payload",
+                        "name": "input",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/http.adminCreateUserInput"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Actor"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
                         }
                     },
                     "401": {
@@ -1370,6 +1500,9 @@ const docTemplate = `{
                 "memory_request": {
                     "type": "string"
                 },
+                "openclaw": {
+                    "$ref": "#/definitions/domain.OpenClawConfig"
+                },
                 "port": {
                     "type": "integer"
                 },
@@ -1529,6 +1662,47 @@ const docTemplate = `{
                 "DeploymentStatusDeleted"
             ]
         },
+        "domain.OpenClawConfig": {
+            "type": "object",
+            "properties": {
+                "agents_markdown": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "existing_secret_name": {
+                    "type": "string"
+                },
+                "extra_env": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "gateway_bind_address": {
+                    "type": "string"
+                },
+                "gateway_port": {
+                    "type": "integer"
+                },
+                "gateway_token": {
+                    "type": "string"
+                },
+                "provider_api_keys": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "settings_json": {
+                    "type": "string"
+                },
+                "workspace_storage": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.Role": {
             "type": "string",
             "enum": [
@@ -1658,6 +1832,96 @@ const docTemplate = `{
             "type": "object",
             "additionalProperties": {
                 "type": "string"
+            }
+        },
+        "http.adminCreateUserInput": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.adminDeployOpenClawInput": {
+            "type": "object",
+            "properties": {
+                "agents_markdown": {
+                    "type": "string"
+                },
+                "app_name": {
+                    "type": "string"
+                },
+                "app_slug": {
+                    "type": "string"
+                },
+                "domain": {
+                    "type": "string"
+                },
+                "existing_secret_name": {
+                    "type": "string"
+                },
+                "extra_env": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "gateway_bind_address": {
+                    "type": "string"
+                },
+                "gateway_port": {
+                    "type": "integer"
+                },
+                "gateway_token": {
+                    "type": "string"
+                },
+                "image": {
+                    "type": "string"
+                },
+                "provider_api_keys": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "public": {
+                    "type": "boolean"
+                },
+                "replicas": {
+                    "type": "integer"
+                },
+                "settings_json": {
+                    "type": "string"
+                },
+                "user_email": {
+                    "type": "string"
+                },
+                "user_name": {
+                    "type": "string"
+                },
+                "workspace_storage": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.adminDeployOpenClawResponse": {
+            "type": "object",
+            "properties": {
+                "app": {
+                    "$ref": "#/definitions/domain.App"
+                },
+                "deployment": {
+                    "$ref": "#/definitions/domain.Deployment"
+                },
+                "used_existing_app": {
+                    "type": "boolean"
+                },
+                "user": {
+                    "$ref": "#/definitions/domain.Actor"
+                }
             }
         },
         "services.CreateAppInput": {

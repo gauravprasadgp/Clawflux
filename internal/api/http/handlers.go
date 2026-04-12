@@ -1,9 +1,12 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
-	
+	"strings"
+
+	"github.com/gauravprasad/clawcontrol/internal/domain"
 	"github.com/gauravprasad/clawcontrol/internal/services"
 )
 
@@ -506,4 +509,278 @@ func (r *Router) handleReady(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 	writeJSON(w, code, status)
+}
+
+type adminCreateUserInput struct {
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+}
+
+type adminDeployOpenClawInput struct {
+	UserEmail          string            `json:"user_email"`
+	UserName           string            `json:"user_name"`
+	AppName            string            `json:"app_name"`
+	AppSlug            string            `json:"app_slug"`
+	Image              string            `json:"image"`
+	Replicas           int32             `json:"replicas"`
+	Public             bool              `json:"public"`
+	Domain             string            `json:"domain"`
+	GatewayBindAddress string            `json:"gateway_bind_address"`
+	GatewayPort        int               `json:"gateway_port"`
+	GatewayToken       string            `json:"gateway_token"`
+	WorkspaceStorage   string            `json:"workspace_storage"`
+	ProviderAPIKeys    map[string]string `json:"provider_api_keys"`
+	AgentsMarkdown     string            `json:"agents_markdown"`
+	SettingsJSON       string            `json:"settings_json"`
+	ExtraEnv           map[string]string `json:"extra_env"`
+	ExistingSecretName string            `json:"existing_secret_name"`
+}
+
+type adminDeployOpenClawResponse struct {
+	User            *domain.Actor      `json:"user"`
+	App             *domain.App        `json:"app"`
+	Deployment      *domain.Deployment `json:"deployment"`
+	UsedExistingApp bool               `json:"used_existing_app"`
+}
+
+func (r *Router) handleAdminUsers(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodPost:
+		r.createAdminUser(w, req)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// createAdminUser godoc
+// @Summary Provision a user as platform admin
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Param X-User-Email header string true "Admin email"
+// @Param X-Platform-Admin header string true "Set to true"
+// @Param input body adminCreateUserInput true "User provision payload"
+// @Success 201 {object} domain.Actor
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Router /v1/admin/users [post]
+func (r *Router) createAdminUser(w http.ResponseWriter, req *http.Request) {
+	actor, err := actorFromContext(req.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !actor.IsPlatformAdmin {
+		writeError(w, domain.ErrForbidden)
+		return
+	}
+
+	var input adminCreateUserInput
+	if err := decodeJSON(req, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+	input.Email = strings.TrimSpace(input.Email)
+	input.DisplayName = strings.TrimSpace(input.DisplayName)
+	if input.Email == "" {
+		writeError(w, domain.ErrValidation)
+		return
+	}
+
+	provisioned, err := r.auth.EnsureActor(req.Context(), input.Email, input.DisplayName)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	_ = r.audit.Record(req.Context(), actor, "admin.user.provision", "user", provisioned.UserID, "admin provisioned user")
+	writeJSON(w, http.StatusCreated, provisioned)
+}
+
+func (r *Router) handleAdminOpenClawDeploy(w http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case http.MethodPost:
+		r.adminDeployOpenClaw(w, req)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+// adminDeployOpenClaw godoc
+// @Summary Deploy OpenClaw for a target user
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Param X-User-Email header string true "Admin email"
+// @Param X-Platform-Admin header string true "Set to true"
+// @Param input body adminDeployOpenClawInput true "OpenClaw deployment payload"
+// @Success 201 {object} adminDeployOpenClawResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Router /v1/admin/openclaw/deploy [post]
+func (r *Router) adminDeployOpenClaw(w http.ResponseWriter, req *http.Request) {
+	actor, err := actorFromContext(req.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !actor.IsPlatformAdmin {
+		writeError(w, domain.ErrForbidden)
+		return
+	}
+
+	var input adminDeployOpenClawInput
+	if err := decodeJSON(req, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	input.UserEmail = strings.TrimSpace(input.UserEmail)
+	input.UserName = strings.TrimSpace(input.UserName)
+	input.AppName = strings.TrimSpace(input.AppName)
+	input.AppSlug = normalizeAdminSlug(input.AppSlug)
+	input.Image = strings.TrimSpace(input.Image)
+	input.Domain = strings.TrimSpace(input.Domain)
+	input.GatewayBindAddress = strings.TrimSpace(input.GatewayBindAddress)
+	input.GatewayToken = strings.TrimSpace(input.GatewayToken)
+	input.WorkspaceStorage = strings.TrimSpace(input.WorkspaceStorage)
+	input.ExistingSecretName = strings.TrimSpace(input.ExistingSecretName)
+	if input.ProviderAPIKeys == nil {
+		input.ProviderAPIKeys = map[string]string{}
+	}
+	for key, value := range input.ProviderAPIKeys {
+		trimmedKey := strings.TrimSpace(key)
+		trimmedValue := strings.TrimSpace(value)
+		delete(input.ProviderAPIKeys, key)
+		if trimmedKey != "" {
+			input.ProviderAPIKeys[trimmedKey] = trimmedValue
+		}
+	}
+	if input.ExtraEnv == nil {
+		input.ExtraEnv = map[string]string{}
+	}
+	for key, value := range input.ExtraEnv {
+		trimmedKey := strings.TrimSpace(key)
+		trimmedValue := strings.TrimSpace(value)
+		delete(input.ExtraEnv, key)
+		if trimmedKey != "" && trimmedValue != "" {
+			input.ExtraEnv[trimmedKey] = trimmedValue
+		}
+	}
+	if input.UserEmail == "" {
+		writeError(w, domain.ErrValidation)
+		return
+	}
+	if input.AppName == "" {
+		input.AppName = "openclaw"
+	}
+	if input.AppSlug == "" {
+		input.AppSlug = normalizeAdminSlug(input.AppName)
+	}
+	if input.AppSlug == "" {
+		input.AppSlug = "openclaw"
+	}
+	if input.Image == "" {
+		input.Image = "ghcr.io/openclaw/openclaw:latest"
+	}
+	if input.GatewayBindAddress == "" {
+		input.GatewayBindAddress = "0.0.0.0"
+	}
+	if input.GatewayPort <= 0 {
+		input.GatewayPort = 18789
+	}
+	if input.WorkspaceStorage == "" {
+		input.WorkspaceStorage = "10Gi"
+	}
+	if input.ExistingSecretName == "" {
+		for key, value := range input.ProviderAPIKeys {
+			if strings.TrimSpace(value) == "" {
+				delete(input.ProviderAPIKeys, key)
+			}
+		}
+	}
+	if input.Replicas <= 0 {
+		input.Replicas = 1
+	}
+
+	targetActor, err := r.auth.EnsureActor(req.Context(), input.UserEmail, input.UserName)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	appInput := services.CreateAppInput{
+		Name: input.AppName,
+		Slug: input.AppSlug,
+		Config: domain.AppConfig{
+			Image:    input.Image,
+			Port:     input.GatewayPort,
+			Env:      map[string]string{},
+			Replicas: input.Replicas,
+			Public:   input.Public,
+			Domain:   input.Domain,
+			OpenClaw: &domain.OpenClawConfig{
+				Enabled:            true,
+				GatewayBindAddress: input.GatewayBindAddress,
+				GatewayPort:        input.GatewayPort,
+				GatewayToken:       input.GatewayToken,
+				WorkspaceStorage:   input.WorkspaceStorage,
+				ProviderAPIKeys:    input.ProviderAPIKeys,
+				AgentsMarkdown:     input.AgentsMarkdown,
+				SettingsJSON:       input.SettingsJSON,
+				ExtraEnv:           input.ExtraEnv,
+				ExistingSecretName: input.ExistingSecretName,
+			},
+		},
+	}
+
+	app, err := r.apps.CreateApp(req.Context(), *targetActor, appInput)
+	usedExisting := false
+	if err != nil {
+		if !errors.Is(err, domain.ErrConflict) {
+			writeError(w, err)
+			return
+		}
+		apps, listErr := r.apps.ListApps(req.Context(), *targetActor)
+		if listErr != nil {
+			writeError(w, listErr)
+			return
+		}
+		for i := range apps {
+			if apps[i].Slug == appInput.Slug {
+				candidate := apps[i]
+				app = &candidate
+				usedExisting = true
+				break
+			}
+		}
+		if app == nil {
+			writeError(w, err)
+			return
+		}
+	}
+
+	deployment, err := r.deployments.CreateDeployment(req.Context(), *targetActor, app.ID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	_ = r.audit.Record(req.Context(), actor, "admin.openclaw.deploy", "deployment", deployment.ID, "admin deployed OpenClaw")
+	writeJSON(w, http.StatusCreated, adminDeployOpenClawResponse{
+		User:            targetActor,
+		App:             app,
+		Deployment:      deployment,
+		UsedExistingApp: usedExisting,
+	})
+}
+
+func normalizeAdminSlug(in string) string {
+	in = strings.TrimSpace(strings.ToLower(in))
+	in = strings.ReplaceAll(in, " ", "-")
+	in = strings.ReplaceAll(in, "_", "-")
+	in = strings.ReplaceAll(in, ".", "-")
+	in = strings.Trim(in, "-")
+	return in
 }

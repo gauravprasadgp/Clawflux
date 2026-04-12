@@ -34,6 +34,8 @@ func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, ap
 	}
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/admin", r.handleAdminUI)
+	mux.HandleFunc("/admin/", r.handleAdminUI)
 	mux.HandleFunc("/healthz", r.handleHealth)
 	mux.HandleFunc("/readyz", r.handleReady)
 	mux.HandleFunc("/swagger", r.handleSwaggerUI)
@@ -53,6 +55,8 @@ func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, ap
 	mux.HandleFunc("/v1/api-keys/", r.withMiddleware(r.withActor(r.handleAPIKeyRoutes)))
 	mux.HandleFunc("/v1/admin/summary", r.withMiddleware(r.withActor(r.handleAdminSummary)))
 	mux.HandleFunc("/v1/admin/audit-logs", r.withMiddleware(r.withActor(r.handleAuditLogs)))
+	mux.HandleFunc("/v1/admin/users", r.withMiddleware(r.withActor(r.handleAdminUsers)))
+	mux.HandleFunc("/v1/admin/openclaw/deploy", r.withMiddleware(r.withActor(r.handleAdminOpenClawDeploy)))
 	mux.HandleFunc("/v1/apps", r.withMiddleware(r.withActor(r.handleApps)))
 	mux.HandleFunc("/v1/apps/", r.withMiddleware(r.withActor(r.handleAppRoutes)))
 	mux.HandleFunc("/v1/deployments/", r.withMiddleware(r.withActor(r.handleDeploymentRoutes)))

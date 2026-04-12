@@ -95,6 +95,20 @@ type AppConfig struct {
 	Public             bool              `json:"public"`
 	Domain             string            `json:"domain,omitempty"`
 	ServiceAccountName string            `json:"service_account_name,omitempty"`
+	OpenClaw           *OpenClawConfig   `json:"openclaw,omitempty"`
+}
+
+type OpenClawConfig struct {
+	Enabled             bool              `json:"enabled"`
+	GatewayBindAddress  string            `json:"gateway_bind_address,omitempty"`
+	GatewayPort         int               `json:"gateway_port,omitempty"`
+	GatewayToken        string            `json:"gateway_token,omitempty"`
+	WorkspaceStorage    string            `json:"workspace_storage,omitempty"`
+	ProviderAPIKeys     map[string]string `json:"provider_api_keys,omitempty"`
+	AgentsMarkdown      string            `json:"agents_markdown,omitempty"`
+	SettingsJSON        string            `json:"settings_json,omitempty"`
+	ExtraEnv            map[string]string `json:"extra_env,omitempty"`
+	ExistingSecretName  string            `json:"existing_secret_name,omitempty"`
 }
 
 type Deployment struct {

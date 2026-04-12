@@ -174,7 +174,7 @@ func (r *Runtime) Worker() *workerpkg.Consumer {
 	consumer := workerpkg.NewConsumer(logger, r.Queue, r.Config.JobMaxAttempts, r.Config.JobRetryBackoff)
 	deploymentCreate := workerhandlers.NewDeploymentCreateHandler(r.AppRepo, r.DeploymentRepo, r.Backend, r.DeploymentService, r.Scheduler)
 	deploymentDelete := workerhandlers.NewDeploymentDeleteHandler(r.AppRepo, r.DeploymentRepo, r.Backend, r.DeploymentService)
-	deploymentSync := workerhandlers.NewDeploymentSyncHandler(r.AppRepo, r.DeploymentRepo, r.Backend, r.DeploymentService)
+	deploymentSync := workerhandlers.NewDeploymentSyncHandler(r.AppRepo, r.DeploymentRepo, r.Backend, r.DeploymentService, r.Scheduler)
 	consumer.Register(domain.JobTypeDeploymentCreate, deploymentCreate.Handle)
 	consumer.Register(domain.JobTypeDeploymentDelete, deploymentDelete.Handle)
 	consumer.Register(domain.JobTypeDeploymentSync, deploymentSync.Handle)

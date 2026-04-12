@@ -13,9 +13,9 @@ import (
 )
 
 type testQueue struct {
-	mu       sync.Mutex
-	jobs     []domain.Job
-	enqueued []domain.Job
+	mu        sync.Mutex
+	jobs      []domain.Job
+	enqueued  []domain.Job
 	onEnqueue func()
 }
 
@@ -59,7 +59,7 @@ func TestConsumerRequeuesFailedJobs(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	consumer := NewConsumer(logger, queue, 3, time.Millisecond)
 
-	ctx, cancel = context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	consumer.Register(domain.JobTypeDeploymentCreate, func(context.Context, domain.Job) error {
 		return errors.New("boom")
 	})
