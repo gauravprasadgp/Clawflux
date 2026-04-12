@@ -26,3 +26,10 @@ func (s *AdminService) Summary(ctx context.Context, actor domain.Actor) (*domain
 	summary.RepositoryDriver = s.repositoryDriver
 	return summary, nil
 }
+
+func (s *AdminService) ListAllInstances(ctx context.Context, actor domain.Actor) ([]domain.AdminInstance, error) {
+	if !actor.IsPlatformAdmin {
+		return nil, domain.ErrForbidden
+	}
+	return s.repo.ListAllInstances(ctx)
+}

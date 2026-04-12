@@ -187,6 +187,12 @@ type AdminSummary struct {
 	RepositoryDriver  string `json:"repository_driver"`
 }
 
+type AdminInstance struct {
+	App        App         `json:"app"`
+	Deployment *Deployment `json:"deployment,omitempty"`
+	UserEmail  string      `json:"user_email"`
+}
+
 type AuditLog struct {
 	ID            string    `json:"id"`
 	TenantID      string    `json:"tenant_id"`
@@ -301,6 +307,7 @@ type APIKeyRepository interface {
 
 type AdminRepository interface {
 	Summary(ctx context.Context) (*AdminSummary, error)
+	ListAllInstances(ctx context.Context) ([]AdminInstance, error)
 }
 
 type AuditRepository interface {

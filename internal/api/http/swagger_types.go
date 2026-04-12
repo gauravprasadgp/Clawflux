@@ -46,6 +46,10 @@ type AuditLogListResponse struct {
 	Items []domain.AuditLog `json:"items"`
 }
 
+type AdminInstanceListResponse struct {
+	Items []domain.AdminInstance `json:"items"`
+}
+
 type APIKeyCreateResultResponse struct {
 	Key    *domain.APIKey `json:"key"`
 	Secret string         `json:"secret"`

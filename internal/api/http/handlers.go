@@ -434,6 +434,30 @@ func (r *Router) deleteAPIKey(w http.ResponseWriter, req *http.Request, keyID st
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleAdminInstances godoc
+// @Summary List all deployed OpenClaw instances across all tenants
+// @Tags Admin
+// @Produce json
+// @Param X-User-Email header string true "Admin email"
+// @Param X-Platform-Admin header string true "Set to true"
+// @Success 200 {object} AdminInstanceListResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Router /v1/admin/instances [get]
+func (r *Router) handleAdminInstances(w http.ResponseWriter, req *http.Request) {
+	actor, err := actorFromContext(req.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	instances, err := r.admin.ListAllInstances(req.Context(), actor)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": instances})
+}
+
 // handleAdminSummary godoc
 // @Summary Get platform summary
 // @Tags Admin

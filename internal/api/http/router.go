@@ -3,6 +3,7 @@ package http
 import (
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gauravprasad/clawcontrol/internal/services"
@@ -34,6 +35,16 @@ func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, ap
 	}
 
 	mux := http.NewServeMux()
+	// React frontend — served from frontend/dist if it exists
+	if _, err := os.Stat("frontend/dist"); err == nil {
+		fs := http.FileServer(http.Dir("frontend/dist"))
+		mux.Handle("/ui/", http.StripPrefix("/ui/", fs))
+		mux.HandleFunc("/ui", func(w http.ResponseWriter, req *http.Request) {
+			http.Redirect(w, req, "/ui/", http.StatusMovedPermanently)
+		})
+	}
+
+	// Legacy HTML admin UI
 	mux.HandleFunc("/admin", r.handleAdminUI)
 	mux.HandleFunc("/admin/", r.handleAdminUI)
 	mux.HandleFunc("/healthz", r.handleHealth)
@@ -53,6 +64,7 @@ func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, ap
 	mux.HandleFunc("/v1/auth/medium/callback", r.withMiddleware(r.handleMediumCallback))
 	mux.HandleFunc("/v1/api-keys", r.withMiddleware(r.withActor(r.handleAPIKeys)))
 	mux.HandleFunc("/v1/api-keys/", r.withMiddleware(r.withActor(r.handleAPIKeyRoutes)))
+	mux.HandleFunc("/v1/admin/instances", r.withMiddleware(r.withActor(r.handleAdminInstances)))
 	mux.HandleFunc("/v1/admin/summary", r.withMiddleware(r.withActor(r.handleAdminSummary)))
 	mux.HandleFunc("/v1/admin/audit-logs", r.withMiddleware(r.withActor(r.handleAuditLogs)))
 	mux.HandleFunc("/v1/admin/users", r.withMiddleware(r.withActor(r.handleAdminUsers)))

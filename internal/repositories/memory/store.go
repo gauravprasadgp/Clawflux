@@ -234,6 +234,48 @@ func (r *AdminRepo) Summary(_ context.Context) (*domain.AdminSummary, error) {
 	return summary, nil
 }
 
+func (r *AdminRepo) ListAllInstances(_ context.Context) ([]domain.AdminInstance, error) {
+	r.state.mu.RLock()
+	defer r.state.mu.RUnlock()
+
+	// build user email lookup via tenant owner
+	ownerEmail := map[string]string{} // tenantID -> email
+	for _, m := range r.state.members {
+		if m.Role == domain.RoleOwner {
+			if u, ok := r.state.users[m.UserID]; ok {
+				ownerEmail[m.TenantID] = u.Email
+			}
+		}
+	}
+
+	// build latest deployment per app
+	latestDep := map[string]*domain.Deployment{} // appID -> latest
+	for _, dep := range r.state.deployments {
+		existing, ok := latestDep[dep.AppID]
+		if !ok || dep.Version > existing.Version {
+			cp := *dep
+			latestDep[dep.AppID] = &cp
+		}
+	}
+
+	out := make([]domain.AdminInstance, 0, len(r.state.apps))
+	for _, app := range r.state.apps {
+		cp := *app
+		inst := domain.AdminInstance{
+			App:       cp,
+			UserEmail: ownerEmail[app.TenantID],
+		}
+		if dep, ok := latestDep[app.ID]; ok {
+			inst.Deployment = dep
+		}
+		out = append(out, inst)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].App.CreatedAt.After(out[j].App.CreatedAt)
+	})
+	return out, nil
+}
+
 func (r *AuditRepo) Create(_ context.Context, log *domain.AuditLog) error {
 	r.state.mu.Lock()
 	defer r.state.mu.Unlock()
