@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, RefreshCw, RotateCcw, XCircle, Trash2 } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, RefreshCw, RotateCcw, Trash2, XCircle } from 'lucide-react'
 import { api } from '../api'
 import StatusBadge from '../components/StatusBadge'
 import { useState } from 'react'
@@ -46,114 +46,136 @@ export default function InstanceDetail() {
 
   return (
     <div className="page">
-      <button className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 20 }}
-        onClick={() => navigate('/')}>
-        <ArrowLeft size={14} /> Back
-      </button>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <div className="page-title">Deployment Detail</div>
-          <div className="mono" style={{ marginTop: 4 }}>{deploymentId}</div>
-        </div>
-        <button className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          onClick={() => { dep.refetch(); events.refetch() }}>
-          <RefreshCw size={14} /> Refresh
+      <div className="page-inner">
+        <button className="btn-ghost" style={{ marginBottom: '1rem' }} onClick={() => navigate('/')}>
+          <ArrowLeft size={14} />
+          Back to dashboard
         </button>
-      </div>
 
-      {actionError && <div className="error-box">{actionError}</div>}
-      {actionSuccess && <div className="success-box">{actionSuccess}</div>}
-      {dep.error && <div className="error-box">{dep.error.message}</div>}
+        <div className="page-header page-header-compact">
+          <div>
+            <div className="eyebrow">
+              <AlertTriangle size={14} />
+              Deployment lifecycle
+            </div>
+            <div className="page-title">Deployment detail</div>
+            <div className="page-subtitle mono">{deploymentId}</div>
+          </div>
+          <div className="page-actions">
+            <button className="btn-ghost" onClick={() => { dep.refetch(); events.refetch() }}>
+              <RefreshCw size={14} />
+              Refresh
+            </button>
+          </div>
+        </div>
 
-      {d && (
-        <>
-          {/* Info + actions */}
-          <div className="grid-2" style={{ marginBottom: 20 }}>
-            <div className="card">
-              <div className="section-title">Deployment Info</div>
-              <InfoRow label="Status"><StatusBadge status={d.status} /></InfoRow>
-              <InfoRow label="Version"><span className="mono">v{d.version}</span></InfoRow>
-              <InfoRow label="Image"><span className="mono" style={{ wordBreak: 'break-all' }}>{d.image_ref}</span></InfoRow>
-              <InfoRow label="Backend">{d.backend || '—'}</InfoRow>
-              <InfoRow label="Namespace"><span className="mono">{d.backend_ref?.namespace || '—'}</span></InfoRow>
-              <InfoRow label="K8s Deployment"><span className="mono">{d.backend_ref?.deployment || '—'}</span></InfoRow>
-              {d.status_reason && <InfoRow label="Reason"><span style={{ color: 'var(--muted)', fontSize: 12 }}>{d.status_reason}</span></InfoRow>}
-              <InfoRow label="Created">{new Date(d.created_at).toLocaleString()}</InfoRow>
+        {actionError && <div className="error-box" style={{ marginBottom: '1rem' }}>{actionError}</div>}
+        {actionSuccess && <div className="success-box" style={{ marginBottom: '1rem' }}>{actionSuccess}</div>}
+        {dep.error && <div className="error-box" style={{ marginBottom: '1rem' }}>{dep.error.message}</div>}
+
+        {d && (
+          <div className="stack">
+            <div className="split-detail">
+              <div className="card">
+                <div className="card-header">
+                  <div>
+                    <div className="section-title">Deployment info</div>
+                    <div className="section-copy">Core metadata, rollout target, and backend reference for this deployment.</div>
+                  </div>
+                  <StatusBadge status={d.status} />
+                </div>
+                <div className="card-body">
+                  <div className="info-list">
+                    <InfoRow label="Version"><span className="mono">v{d.version}</span></InfoRow>
+                    <InfoRow label="Image"><span className="mono" style={{ wordBreak: 'break-all' }}>{d.image_ref}</span></InfoRow>
+                    <InfoRow label="Backend">{d.backend || '—'}</InfoRow>
+                    <InfoRow label="Namespace"><span className="mono">{d.backend_ref?.namespace || '—'}</span></InfoRow>
+                    <InfoRow label="K8s Deployment"><span className="mono">{d.backend_ref?.deployment || '—'}</span></InfoRow>
+                    {d.status_reason ? <InfoRow label="Reason"><span style={{ color: 'var(--muted-strong)' }}>{d.status_reason}</span></InfoRow> : null}
+                    <InfoRow label="Created"><span className="mono">{new Date(d.created_at).toLocaleString()}</span></InfoRow>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="card-header">
+                  <div>
+                    <div className="section-title">Actions</div>
+                    <div className="section-copy">Queue recovery or cleanup actions for this deployment.</div>
+                  </div>
+                </div>
+                <div className="card-body">
+                  <div className="stack">
+                    <button className="btn-primary" onClick={() => retry.mutate()} disabled={retry.isPending}>
+                      <RotateCcw size={14} />
+                      {retry.isPending ? 'Retrying…' : 'Retry deployment'}
+                    </button>
+                    <button className="btn-warn" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
+                      <XCircle size={14} />
+                      {cancel.isPending ? 'Cancelling…' : 'Cancel deployment'}
+                    </button>
+                    <button
+                      className="btn-danger"
+                      onClick={() => {
+                        if (confirm('Queue this deployment for deletion?')) del.mutate()
+                      }}
+                      disabled={del.isPending}
+                    >
+                      <Trash2 size={14} />
+                      {del.isPending ? 'Queuing delete…' : 'Delete deployment'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="card">
-              <div className="section-title">Actions</div>
-              <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 16 }}>
-                Manage this deployment lifecycle.
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                  onClick={() => retry.mutate()}
-                  disabled={retry.isPending}>
-                  <RotateCcw size={14} /> {retry.isPending ? 'Retrying…' : 'Retry Deployment'}
-                </button>
-                <button className="btn-warn" style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                  onClick={() => cancel.mutate()}
-                  disabled={cancel.isPending}>
-                  <XCircle size={14} /> {cancel.isPending ? 'Cancelling…' : 'Cancel'}
-                </button>
-                <button className="btn-danger" style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                  onClick={() => {
-                    if (confirm('Queue this deployment for deletion?')) del.mutate()
-                  }}
-                  disabled={del.isPending}>
-                  <Trash2 size={14} /> {del.isPending ? 'Queuing delete…' : 'Delete'}
-                </button>
+              <div className="table-toolbar">
+                <div>
+                  <div className="section-title">Deployment events</div>
+                  <div className="toolbar-copy">Chronological event trail for this deployment record.</div>
+                </div>
+              </div>
+              {evts.length === 0 ? (
+                <div className="empty-state">No events yet.</div>
+              ) : (
+                <div className="timeline">
+                  {[...evts].reverse().map(e => (
+                    <div key={e.id} className="timeline-item">
+                      <div className="timeline-head">
+                        <div className="timeline-title mono">{e.type}</div>
+                        <div className="mono">{new Date(e.created_at).toLocaleString()}</div>
+                      </div>
+                      <div className="timeline-copy">{e.message}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="card">
+              <div className="card-header">
+                <div>
+                  <div className="section-title">Config snapshot</div>
+                  <div className="section-copy">Raw deployment configuration captured for this rollout.</div>
+                </div>
+              </div>
+              <div className="card-body">
+                <pre>{JSON.stringify(d.config_snapshot, null, 2)}</pre>
               </div>
             </div>
           </div>
-
-          {/* Events */}
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)' }}>
-              <div className="section-title" style={{ marginBottom: 0 }}>Deployment Events</div>
-            </div>
-            {evts.length === 0 ? (
-              <div className="empty-state">No events yet.</div>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th>Time</th>
-                    <th>Type</th>
-                    <th>Message</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...evts].reverse().map(e => (
-                    <tr key={e.id}>
-                      <td className="mono" style={{ whiteSpace: 'nowrap' }}>{new Date(e.created_at).toLocaleString()}</td>
-                      <td><span className="mono" style={{ color: 'var(--info)' }}>{e.type}</span></td>
-                      <td style={{ color: 'var(--muted)' }}>{e.message}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Config snapshot */}
-          <div className="card" style={{ marginTop: 20 }}>
-            <div className="section-title">Config Snapshot</div>
-            <pre>{JSON.stringify(d.config_snapshot, null, 2)}</pre>
-          </div>
-        </>
-      )}
+        )}
+      </div>
     </div>
   )
 }
 
 function InfoRow({ label, children }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '7px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
-      <span style={{ color: 'var(--muted)', flexShrink: 0, marginRight: 12 }}>{label}</span>
-      <span style={{ textAlign: 'right' }}>{children}</span>
+    <div className="info-row">
+      <span className="info-row-label">{label}</span>
+      <span className="info-row-value">{children}</span>
     </div>
   )
 }

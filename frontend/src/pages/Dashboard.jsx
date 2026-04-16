@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { RefreshCw } from 'lucide-react'
+import { ArrowRight, Boxes, RefreshCw, Rocket, ShieldAlert, Users } from 'lucide-react'
 import { api } from '../api'
 import StatusBadge from '../components/StatusBadge'
 
@@ -24,100 +24,170 @@ export default function Dashboard() {
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div>
-          <div className="page-title">Dashboard</div>
-          <div className="page-subtitle">Platform overview and all deployed OpenClaw instances</div>
-        </div>
-        <button className="btn-ghost" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          onClick={() => { summary.refetch(); instances.refetch() }}>
-          <RefreshCw size={14} /> Refresh
-        </button>
-      </div>
+      <div className="page-inner">
+        <div className="hero-grid">
+          <div className="card hero-card">
+            <div className="card-body">
+              <div>
+                <div className="eyebrow">
+                  <Boxes size={14} />
+                  Platform overview
+                </div>
+                <div className="page-title">Run the whole OpenClaw fleet from one cockpit.</div>
+                <div className="page-subtitle hero-lead">
+                  Monitor deployments, catch failures quickly, and jump from fleet health to instance-level action without leaving the console.
+                </div>
+              </div>
 
-      {/* Stats */}
-      <div className="grid-4" style={{ marginBottom: 28 }}>
-        {[
-          { label: 'Users', value: stats.users ?? '—' },
-          { label: 'Apps', value: stats.apps ?? '—' },
-          { label: 'Deployments', value: stats.deployments ?? '—' },
-          { label: 'Failed', value: stats.failed_deployments ?? '—', danger: true },
-        ].map(s => (
-          <div key={s.label} className="card stat-card">
-            <div className="stat-value" style={s.danger && s.value > 0 ? { color: 'var(--danger)' } : {}}>{s.value}</div>
-            <div className="stat-label">{s.label}</div>
+              <div>
+                <div className="hero-actions">
+                  <button className="btn-primary" onClick={() => navigate('/deploy')}>
+                    <Rocket size={16} />
+                    New deployment
+                  </button>
+                  <button className="btn-ghost" onClick={() => navigate('/users')}>
+                    <Users size={16} />
+                    Manage users
+                  </button>
+                </div>
+
+                <div className="hero-stats">
+                  <div className="mini-stat">
+                    <strong>{items.length}</strong>
+                    <span>tracked instances in the admin view</span>
+                  </div>
+                  <div className="mini-stat">
+                    <strong>{stats.repository_driver || 'memory'}</strong>
+                    <span>active repository driver</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        ))}
-      </div>
 
-      {/* Instances table */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div className="section-title" style={{ marginBottom: 0 }}>OpenClaw Instances</div>
-          {instances.isFetching && <div className="spinner" />}
+          <div className="stack">
+            <div className="card">
+              <div className="card-body">
+                <div className="build-pill">
+                  <ShieldAlert size={14} />
+                  Attention lane
+                </div>
+                <div className="section-title" style={{ marginTop: '1rem' }}>Keep the unstable cases visible.</div>
+                <div className="section-copy">
+                  Failed deployments are surfaced separately so operators can retry, cancel, or delete them before they pile up.
+                </div>
+                <div className="stat-value stat-value-danger" style={{ marginTop: '1.1rem' }}>
+                  {stats.failed_deployments ?? '—'}
+                </div>
+                <div className="stat-footnote">deployments currently marked failed</div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-body">
+                <div className="section-title">Live refresh cadence</div>
+                <div className="section-copy">Summary refreshes every 15 seconds. Instance list refreshes every 10 seconds.</div>
+                <div className="actions-row" style={{ marginTop: '1rem' }}>
+                  <button className="btn-ghost" onClick={() => { summary.refetch(); instances.refetch() }}>
+                    <RefreshCw size={14} />
+                    Refresh now
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {instances.error && (
-          <div className="error-box" style={{ margin: 16 }}>{instances.error.message}</div>
-        )}
-
-        {items.length === 0 && !instances.isLoading ? (
-          <div className="empty-state">No instances deployed yet.</div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>User</th>
-                <th>App</th>
-                <th>Namespace</th>
-                <th>Status</th>
-                <th>Version</th>
-                <th>Last Deployed</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map(inst => (
-                <tr key={inst.app.id}>
-                  <td>{inst.user_email || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{inst.app.name}</div>
-                    <div className="mono">{inst.app.slug}</div>
-                  </td>
-                  <td className="mono">
-                    {inst.deployment?.backend_ref?.namespace || <span style={{ color: 'var(--muted)' }}>—</span>}
-                  </td>
-                  <td>
-                    <StatusBadge status={inst.deployment?.status} />
-                  </td>
-                  <td className="mono">
-                    {inst.deployment ? `v${inst.deployment.version}` : '—'}
-                  </td>
-                  <td style={{ color: 'var(--muted)', fontSize: 12 }}>
-                    {inst.deployment
-                      ? new Date(inst.deployment.created_at).toLocaleString()
-                      : '—'}
-                  </td>
-                  <td>
-                    {inst.deployment && (
-                      <button className="btn-ghost" style={{ padding: '5px 12px', fontSize: 12 }}
-                        onClick={() => navigate(`/instances/${inst.deployment.id}`)}>
-                        View
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {stats.repository_driver && (
-        <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 12 }}>
-          Storage: {stats.repository_driver}
+        <div className="grid-4" style={{ marginBottom: '1rem' }}>
+          {[
+            { label: 'Users', value: stats.users ?? '—', icon: Users, note: 'provisioned operator accounts' },
+            { label: 'Apps', value: stats.apps ?? '—', icon: Boxes, note: 'application definitions on platform' },
+            { label: 'Deployments', value: stats.deployments ?? '—', icon: Rocket, note: 'deployment records created' },
+            { label: 'Failed', value: stats.failed_deployments ?? '—', icon: ShieldAlert, note: 'requiring intervention', danger: true },
+          ].map(({ label, value, icon: Icon, note, danger }) => (
+            <div key={label} className="card stat-card">
+              <div className="card-body">
+                <div className="stat-kicker">
+                  <Icon size={14} />
+                  {label}
+                </div>
+                <div className={`stat-value${danger && Number(value) > 0 ? ' stat-value-danger' : ''}`}>{value}</div>
+                <div className="stat-footnote">{note}</div>
+              </div>
+            </div>
+          ))}
         </div>
-      )}
+
+        <div className="card">
+          <div className="table-toolbar">
+            <div>
+              <div className="section-title">OpenClaw instances</div>
+              <div className="toolbar-copy">Browse every known instance, jump into deployment detail, and keep namespaces visible at a glance.</div>
+            </div>
+            {instances.isFetching ? <div className="spinner" /> : null}
+          </div>
+
+          {instances.error && (
+            <div className="card-body" style={{ paddingTop: 0 }}>
+              <div className="error-box">{instances.error.message}</div>
+            </div>
+          )}
+
+          {items.length === 0 && !instances.isLoading ? (
+            <div className="empty-state">No instances deployed yet.</div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>App</th>
+                    <th>Namespace</th>
+                    <th>Status</th>
+                    <th>Version</th>
+                    <th>Last deployed</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map(inst => (
+                    <tr key={inst.app.id}>
+                      <td>{inst.user_email || <span className="mono">—</span>}</td>
+                      <td>
+                        <div style={{ fontWeight: 700 }}>{inst.app.name}</div>
+                        <div className="mono">{inst.app.slug}</div>
+                      </td>
+                      <td className="mono">
+                        {inst.deployment?.backend_ref?.namespace || '—'}
+                      </td>
+                      <td>
+                        <StatusBadge status={inst.deployment?.status} />
+                      </td>
+                      <td className="mono">
+                        {inst.deployment ? `v${inst.deployment.version}` : '—'}
+                      </td>
+                      <td className="mono">
+                        {inst.deployment ? new Date(inst.deployment.created_at).toLocaleString() : '—'}
+                      </td>
+                      <td>
+                        {inst.deployment ? (
+                          <button
+                            className="btn-ghost"
+                            onClick={() => navigate(`/instances/${inst.deployment.id}`)}
+                          >
+                            View detail
+                            <ArrowRight size={14} />
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
