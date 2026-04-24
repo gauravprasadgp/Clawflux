@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Boxes, RefreshCw, Rocket, ShieldAlert, Users } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Boxes, CheckCircle2, RefreshCw, Rocket, ShieldAlert, Users, XCircle } from 'lucide-react'
 import { api } from '../api'
 import StatusBadge from '../components/StatusBadge'
 
@@ -19,8 +19,15 @@ export default function Dashboard() {
     refetchInterval: 10000,
   })
 
+  const preflight = useQuery({
+    queryKey: ['preflight'],
+    queryFn: api.getPreflight,
+    refetchInterval: 20000,
+  })
+
   const stats = summary.data || {}
   const items = instances.data?.items || []
+  const checks = preflight.data?.checks || []
 
   return (
     <div className="page">
@@ -68,27 +75,47 @@ export default function Dashboard() {
           <div className="stack">
             <div className="card">
               <div className="card-body">
-                <div className="build-pill">
-                  <ShieldAlert size={14} />
-                  Attention lane
+                <div className={`preflight-status preflight-status-${preflight.data?.status || 'loading'}`}>
+                  <PreflightIcon status={preflight.data?.status} />
+                  {preflight.data?.status || 'checking'}
                 </div>
-                <div className="section-title" style={{ marginTop: '1rem' }}>Keep the unstable cases visible.</div>
-                <div className="section-copy">
-                  Failed deployments are surfaced separately so operators can retry, cancel, or delete them before they pile up.
+                <div className="section-title" style={{ marginTop: '1rem' }}>Launch readiness</div>
+                <div className="section-copy">Runtime checks highlight the setup issues that usually stop first deployments.</div>
+
+                {preflight.error ? (
+                  <div className="error-box" style={{ marginTop: '1rem' }}>{preflight.error.message}</div>
+                ) : (
+                  <div className="preflight-list">
+                    {checks.slice(0, 5).map(check => (
+                      <div key={check.id} className={`preflight-row preflight-row-${check.status}`}>
+                        <PreflightIcon status={check.status} />
+                        <div>
+                          <strong>{check.label}</strong>
+                          <span>{check.message}</span>
+                        </div>
+                      </div>
+                    ))}
+                    {checks.length === 0 ? <div className="field-hint">Checking runtime dependencies...</div> : null}
+                  </div>
+                )}
+
+                <div className="runtime-strip">
+                  <span>{preflight.data?.backend || 'backend...'}</span>
+                  <span>{preflight.data?.repository_driver || stats.repository_driver || 'repository...'}</span>
                 </div>
-                <div className="stat-value stat-value-danger" style={{ marginTop: '1.1rem' }}>
-                  {stats.failed_deployments ?? '—'}
-                </div>
-                <div className="stat-footnote">deployments currently marked failed</div>
               </div>
             </div>
 
             <div className="card">
               <div className="card-body">
-                <div className="section-title">Live refresh cadence</div>
-                <div className="section-copy">Summary refreshes every 15 seconds. Instance list refreshes every 10 seconds.</div>
+                <div className="section-title">Attention lane</div>
+                <div className="section-copy">Failed deployments are kept visible so operators can retry, cancel, or delete them quickly.</div>
+                <div className="stat-value stat-value-danger" style={{ marginTop: '1rem' }}>
+                  {stats.failed_deployments ?? '—'}
+                </div>
+                <div className="stat-footnote">deployments currently marked failed</div>
                 <div className="actions-row" style={{ marginTop: '1rem' }}>
-                  <button className="btn-ghost" onClick={() => { summary.refetch(); instances.refetch() }}>
+                  <button className="btn-ghost" onClick={() => { summary.refetch(); instances.refetch(); preflight.refetch() }}>
                     <RefreshCw size={14} />
                     Refresh now
                   </button>
@@ -190,4 +217,10 @@ export default function Dashboard() {
       </div>
     </div>
   )
+}
+
+function PreflightIcon({ status }) {
+  if (status === 'pass' || status === 'ready') return <CheckCircle2 size={15} />
+  if (status === 'fail' || status === 'blocked') return <XCircle size={15} />
+  return <AlertTriangle size={15} />
 }

@@ -20,7 +20,11 @@ async function request(method, path, body) {
   })
   const text = await res.text()
   let data = text
-  try { data = JSON.parse(text) } catch (_) {}
+  try {
+    data = JSON.parse(text)
+  } catch {
+    data = text
+  }
   if (!res.ok) {
     const msg = (data && data.message) || (data && data.error) || text || res.statusText
     throw new Error(msg)
@@ -31,6 +35,7 @@ async function request(method, path, body) {
 export const api = {
   getSummary: () => request('GET', '/v1/admin/summary'),
   getInstances: () => request('GET', '/v1/admin/instances'),
+  getPreflight: () => request('GET', '/v1/admin/preflight'),
   getAuditLogs: (limit = 50) => request('GET', `/v1/admin/audit-logs?limit=${limit}`),
 
   provisionUser: (email, displayName) =>

@@ -159,6 +159,9 @@ func (r *Runtime) HTTPHandler() http.Handler {
 	return httpapi.NewRouter(
 		r.Logger,
 		r.Config.DevelopmentAuth,
+		r.Config.RepositoryDriver,
+		r.Backend.Name(),
+		r.Config.AllowedIngressHost,
 		r.AuthService,
 		r.APIKeyService,
 		r.AdminService,

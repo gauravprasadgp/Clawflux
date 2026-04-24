@@ -18,9 +18,12 @@ type Router struct {
 	apps        *services.AppService
 	deployments *services.DeploymentService
 	devAuth     bool
+	repository  string
+	backend     string
+	ingressHost string
 }
 
-func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, apiKeys *services.APIKeyService, admin *services.AdminService, audit *services.AuditService, health *services.HealthService, apps *services.AppService, deployments *services.DeploymentService) http.Handler {
+func NewRouter(logger *slog.Logger, devAuth bool, repository string, backend string, ingressHost string, auth *services.AuthService, apiKeys *services.APIKeyService, admin *services.AdminService, audit *services.AuditService, health *services.HealthService, apps *services.AppService, deployments *services.DeploymentService) http.Handler {
 	r := &Router{
 		logger:      logger,
 		auth:        auth,
@@ -31,6 +34,9 @@ func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, ap
 		apps:        apps,
 		deployments: deployments,
 		devAuth:     devAuth,
+		repository:  repository,
+		backend:     backend,
+		ingressHost: ingressHost,
 	}
 
 	mux := http.NewServeMux()
@@ -57,6 +63,7 @@ func NewRouter(logger *slog.Logger, devAuth bool, auth *services.AuthService, ap
 	mux.HandleFunc("/v1/api-keys/", r.withMiddleware(r.withActor(r.handleAPIKeyRoutes)))
 	mux.HandleFunc("/v1/admin/instances", r.withMiddleware(r.withActor(r.handleAdminInstances)))
 	mux.HandleFunc("/v1/admin/summary", r.withMiddleware(r.withActor(r.handleAdminSummary)))
+	mux.HandleFunc("/v1/admin/preflight", r.withMiddleware(r.withActor(r.handleAdminPreflight)))
 	mux.HandleFunc("/v1/admin/audit-logs", r.withMiddleware(r.withActor(r.handleAuditLogs)))
 	mux.HandleFunc("/v1/admin/users", r.withMiddleware(r.withActor(r.handleAdminUsers)))
 	mux.HandleFunc("/v1/admin/openclaw/deploy", r.withMiddleware(r.withActor(r.handleAdminOpenClawDeploy)))
@@ -214,5 +221,3 @@ func (r *Router) handleAPIKeyRoutes(w http.ResponseWriter, req *http.Request) {
 	}
 	http.NotFound(w, req)
 }
-
-

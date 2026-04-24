@@ -484,6 +484,98 @@ func (r *Router) handleAdminSummary(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, summary)
 }
 
+// handleAdminPreflight godoc
+// @Summary Inspect runtime readiness and setup guidance
+// @Tags Admin
+// @Produce json
+// @Param X-User-Email header string true "Admin email"
+// @Param X-Platform-Admin header string true "Set to true"
+// @Success 200 {object} AdminPreflightResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Router /v1/admin/preflight [get]
+func (r *Router) handleAdminPreflight(w http.ResponseWriter, req *http.Request) {
+	actor, err := actorFromContext(req.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !actor.IsPlatformAdmin {
+		writeError(w, domain.ErrForbidden)
+		return
+	}
+
+	readiness := r.health.Readiness(req.Context())
+	response := AdminPreflightResponse{
+		Status:             "ready",
+		Backend:            r.backend,
+		RepositoryDriver:   r.repository,
+		DevelopmentAuth:    r.devAuth,
+		DefaultIngressHost: r.ingressHost,
+		Readiness:          readiness,
+	}
+
+	add := func(id, label, status, severity, message string) {
+		response.Checks = append(response.Checks, AdminPreflightCheck{
+			ID:       id,
+			Label:    label,
+			Status:   status,
+			Severity: severity,
+			Message:  message,
+		})
+		switch status {
+		case "fail":
+			response.Status = "blocked"
+		case "warn":
+			if response.Status == "ready" {
+				response.Status = "warning"
+			}
+		}
+	}
+
+	add("api", "API process", "pass", "info", "The HTTP API is responding.")
+
+	if r.repository == "memory" {
+		add("persistence", "Persistence", "warn", "warning", "Using the in-memory repository. Great for demos, but data resets on restart.")
+		response.Recommendations = append(response.Recommendations, "Set REPOSITORY_DRIVER=postgres and DATABASE_URL before inviting real users.")
+	} else if unhealthyReadinessValue(readiness["database"]) {
+		add("persistence", "Persistence", "fail", "critical", readiness["database"])
+		response.Recommendations = append(response.Recommendations, "Check DATABASE_URL, run migrations, and confirm the API can reach Postgres.")
+	} else {
+		add("persistence", "Persistence", "pass", "info", "Postgres is reachable.")
+	}
+
+	if unhealthyReadinessValue(readiness["redis"]) {
+		add("queue", "Job queue", "fail", "critical", readiness["redis"])
+		response.Recommendations = append(response.Recommendations, "Start Redis or update REDIS_ADDR so deployment jobs can be queued.")
+	} else {
+		add("queue", "Job queue", "pass", "info", "Redis is reachable for async deployment jobs.")
+	}
+
+	if r.backend == "" {
+		add("backend", "Deployment backend", "fail", "critical", "No deployment backend is registered.")
+		response.Recommendations = append(response.Recommendations, "Configure a deployment backend before creating OpenClaw instances.")
+	} else {
+		add("backend", "Deployment backend", "pass", "info", "Using the "+r.backend+" deployment backend.")
+	}
+
+	if r.devAuth {
+		add("auth", "Auth mode", "warn", "warning", "Development auth is enabled and trusts request headers.")
+		response.Recommendations = append(response.Recommendations, "Disable DEVELOPMENT_AUTH and use real identity or API-key auth outside local development.")
+	} else {
+		add("auth", "Auth mode", "pass", "info", "Development header auth is disabled.")
+	}
+
+	if strings.TrimSpace(r.ingressHost) == "" {
+		add("ingress", "Ingress default", "warn", "warning", "No default ingress host is configured.")
+		response.Recommendations = append(response.Recommendations, "Set DEFAULT_INGRESS_HOST to make generated domains predictable.")
+	} else {
+		add("ingress", "Ingress default", "pass", "info", "Default ingress host is "+r.ingressHost+".")
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
 // handleAuditLogs godoc
 // @Summary List tenant audit logs
 // @Tags Audit
@@ -527,12 +619,16 @@ func (r *Router) handleReady(w http.ResponseWriter, req *http.Request) {
 	status := r.health.Readiness(req.Context())
 	code := http.StatusOK
 	for _, value := range status {
-		if value != "ok" {
+		if unhealthyReadinessValue(value) {
 			code = http.StatusServiceUnavailable
 			break
 		}
 	}
 	writeJSON(w, code, status)
+}
+
+func unhealthyReadinessValue(value string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(value)), "error:")
 }
 
 type adminCreateUserInput struct {

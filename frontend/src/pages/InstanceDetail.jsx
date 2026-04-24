@@ -24,22 +24,9 @@ export default function InstanceDetail() {
     refetchInterval: 8000,
   })
 
-  function mutate(fn, successMsg) {
-    return useMutation({
-      mutationFn: fn,
-      onSuccess: () => {
-        setActionError('')
-        setActionSuccess(successMsg)
-        qc.invalidateQueries(['deployment', deploymentId])
-        qc.invalidateQueries(['instances'])
-      },
-      onError: (e) => { setActionError(e.message); setActionSuccess('') },
-    })
-  }
-
-  const retry = mutate(() => api.retryDeployment(deploymentId), 'Retry queued.')
-  const cancel = mutate(() => api.cancelDeployment(deploymentId), 'Deployment cancelled.')
-  const del = mutate(() => api.deleteDeployment(deploymentId), 'Deletion queued.')
+  const retry = useDeploymentAction(deploymentId, () => api.retryDeployment(deploymentId), 'Retry queued.', qc, setActionError, setActionSuccess)
+  const cancel = useDeploymentAction(deploymentId, () => api.cancelDeployment(deploymentId), 'Deployment cancelled.', qc, setActionError, setActionSuccess)
+  const del = useDeploymentAction(deploymentId, () => api.deleteDeployment(deploymentId), 'Deletion queued.', qc, setActionError, setActionSuccess)
 
   const d = dep.data
   const evts = events.data?.items || []
@@ -178,4 +165,20 @@ function InfoRow({ label, children }) {
       <span className="info-row-value">{children}</span>
     </div>
   )
+}
+
+function useDeploymentAction(deploymentId, fn, successMsg, queryClient, setActionError, setActionSuccess) {
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      setActionError('')
+      setActionSuccess(successMsg)
+      queryClient.invalidateQueries(['deployment', deploymentId])
+      queryClient.invalidateQueries(['instances'])
+    },
+    onError: (e) => {
+      setActionError(e.message)
+      setActionSuccess('')
+    },
+  })
 }

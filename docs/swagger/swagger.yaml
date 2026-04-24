@@ -275,6 +275,44 @@ definitions:
           $ref: '#/definitions/domain.AdminInstance'
         type: array
     type: object
+  http.AdminPreflightCheck:
+    properties:
+      id:
+        type: string
+      label:
+        type: string
+      message:
+        type: string
+      severity:
+        type: string
+      status:
+        type: string
+    type: object
+  http.AdminPreflightResponse:
+    properties:
+      backend:
+        type: string
+      checks:
+        items:
+          $ref: '#/definitions/http.AdminPreflightCheck'
+        type: array
+      default_ingress_host:
+        type: string
+      development_auth:
+        type: boolean
+      readiness:
+        additionalProperties:
+          type: string
+        type: object
+      recommendations:
+        items:
+          type: string
+        type: array
+      repository_driver:
+        type: string
+      status:
+        type: string
+    type: object
   http.AppListResponse:
     properties:
       items:
@@ -559,6 +597,37 @@ paths:
           schema:
             $ref: '#/definitions/http.ErrorResponse'
       summary: Deploy OpenClaw for a target user
+      tags:
+      - Admin
+  /v1/admin/preflight:
+    get:
+      parameters:
+      - description: Admin email
+        in: header
+        name: X-User-Email
+        required: true
+        type: string
+      - description: Set to true
+        in: header
+        name: X-Platform-Admin
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AdminPreflightResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Inspect runtime readiness and setup guidance
       tags:
       - Admin
   /v1/admin/summary:

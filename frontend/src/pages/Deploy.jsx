@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { KeyRound, Rocket, ServerCog, ShieldCheck, Sparkles } from 'lucide-react'
@@ -24,10 +24,55 @@ const defaults = {
   public: true,
 }
 
+const profiles = {
+  local: {
+    label: 'Local',
+    description: 'Small demo instance with private routing.',
+    values: {
+      replicas: 1,
+      workspace_storage: '5Gi',
+      public: false,
+      domain: '',
+      image: 'ghcr.io/openclaw/openclaw:latest',
+    },
+  },
+  team: {
+    label: 'Team',
+    description: 'Default shared workspace for a real user.',
+    values: {
+      replicas: 1,
+      workspace_storage: '10Gi',
+      public: true,
+      image: 'ghcr.io/openclaw/openclaw:latest',
+    },
+  },
+  production: {
+    label: 'Production',
+    description: 'Larger persistent workspace with two replicas.',
+    values: {
+      replicas: 2,
+      workspace_storage: '25Gi',
+      public: true,
+      image: 'ghcr.io/openclaw/openclaw:latest',
+    },
+  },
+}
+
 export default function Deploy() {
   const navigate = useNavigate()
   const [form, setForm] = useState(defaults)
   const [result, setResult] = useState(null)
+  const [profile, setProfile] = useState('team')
+
+  const providerKeys = useMemo(() => parseJSONBlock(form.provider_api_keys, 'Provider API Keys'), [form.provider_api_keys])
+  const extraEnv = useMemo(() => parseJSONBlock(form.extra_env, 'Extra Env'), [form.extra_env])
+  const settings = useMemo(() => parseOptionalJSONBlock(form.settings_json, 'settings.json content'), [form.settings_json])
+  const validationErrors = [
+    !form.user_email.trim() ? 'User email is required.' : '',
+    providerKeys.error,
+    extraEnv.error,
+    settings.error,
+  ].filter(Boolean)
 
   const deploy = useMutation({
     mutationFn: () => {
@@ -35,14 +80,21 @@ export default function Deploy() {
         ...form,
         replicas: Number(form.replicas) || 1,
         gateway_port: Number(form.gateway_port) || 18789,
-        provider_api_keys: JSON.parse(form.provider_api_keys || '{}'),
-        extra_env: JSON.parse(form.extra_env || '{}'),
+        provider_api_keys: providerKeys.value,
+        extra_env: extraEnv.value,
       }
       return api.deployOpenClaw(payload)
     },
     onSuccess: (data) => setResult({ ok: true, data }),
     onError: (e) => setResult({ ok: false, msg: e.message }),
   })
+  const canDeploy = validationErrors.length === 0 && !deploy.isPending
+
+  function applyProfile(key) {
+    const next = profiles[key]
+    setProfile(key)
+    setForm(f => ({ ...f, ...next.values }))
+  }
 
   function field(key, label, opts = {}) {
     return (
@@ -107,10 +159,19 @@ export default function Deploy() {
               <div className="card-body">
                 <div className="build-pill">
                   <Sparkles size={14} />
-                  Operator tips
+                  Launch profile
                 </div>
-                <div className="section-copy" style={{ marginTop: '1rem' }}>
-                  Use a stable image tag for production rollouts. Keep `provider_api_keys` minimal and let shared secrets live in a Kubernetes secret when possible.
+                <div className="profile-selector">
+                  {Object.entries(profiles).map(([key, item]) => (
+                    <button
+                      key={key}
+                      className={`profile-option${profile === key ? ' active' : ''}`}
+                      onClick={() => applyProfile(key)}
+                    >
+                      <strong>{item.label}</strong>
+                      <span>{item.description}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -123,6 +184,13 @@ export default function Deploy() {
                   <div className="surface-title">{localStorage.getItem('adminEmail') || 'No admin email set'}</div>
                   <div className="surface-copy">{localStorage.getItem('adminName') || 'Platform operator'}</div>
                 </div>
+                {validationErrors.length > 0 ? (
+                  <div className="validation-list">
+                    {validationErrors.map(error => <div key={error}>{error}</div>)}
+                  </div>
+                ) : (
+                  <div className="success-box" style={{ marginTop: '1rem' }}>Deployment payload is ready to submit.</div>
+                )}
               </div>
             </div>
           </div>
@@ -190,6 +258,7 @@ export default function Deploy() {
                     onChange={e => setForm(f => ({ ...f, provider_api_keys: e.target.value }))}
                   />
                   <div className="field-hint">Example: {`{"OPENAI_API_KEY":"..."}`}</div>
+                  {providerKeys.error ? <div className="field-error">{providerKeys.error}</div> : null}
                 </div>
                 <div className="form-group">
                   <label>Extra Env (JSON)</label>
@@ -199,6 +268,7 @@ export default function Deploy() {
                     value={form.extra_env}
                     onChange={e => setForm(f => ({ ...f, extra_env: e.target.value }))}
                   />
+                  {extraEnv.error ? <div className="field-error">{extraEnv.error}</div> : null}
                 </div>
               </div>
             </div>
@@ -232,6 +302,7 @@ export default function Deploy() {
                     placeholder='{"default_model":"gpt-5.4-mini"}'
                     onChange={e => setForm(f => ({ ...f, settings_json: e.target.value }))}
                   />
+                  {settings.error ? <div className="field-error">{settings.error}</div> : null}
                 </div>
                 <label className="checkbox-row">
                   <input
@@ -256,6 +327,8 @@ export default function Deploy() {
   ...form,
   replicas: Number(form.replicas) || 1,
   gateway_port: Number(form.gateway_port) || 18789,
+  provider_api_keys: providerKeys.value,
+  extra_env: extraEnv.value,
 }, null, 2)}
                 </pre>
               </div>
@@ -265,7 +338,7 @@ export default function Deploy() {
               className="btn-primary"
               style={{ width: '100%' }}
               onClick={() => deploy.mutate()}
-              disabled={deploy.isPending}
+              disabled={!canDeploy}
             >
               <Rocket size={16} />
               {deploy.isPending ? 'Deploying…' : 'Deploy OpenClaw'}
@@ -297,4 +370,21 @@ export default function Deploy() {
 
 function UsersBadge() {
   return <div className="build-pill">User target</div>
+}
+
+function parseJSONBlock(raw, label) {
+  try {
+    const value = JSON.parse(raw || '{}')
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      return { value: {}, error: `${label} must be a JSON object.` }
+    }
+    return { value, error: '' }
+  } catch (error) {
+    return { value: {}, error: `${label} is invalid JSON: ${error.message}` }
+  }
+}
+
+function parseOptionalJSONBlock(raw, label) {
+  if (!raw.trim()) return { value: null, error: '' }
+  return parseJSONBlock(raw, label)
 }

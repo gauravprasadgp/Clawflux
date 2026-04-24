@@ -226,6 +226,53 @@
                 }
             }
         },
+        "/v1/admin/preflight": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Inspect runtime readiness and setup guidance",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Admin email",
+                        "name": "X-User-Email",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true",
+                        "name": "X-Platform-Admin",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.AdminPreflightResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/admin/summary": {
             "get": {
                 "produces": [
@@ -1811,6 +1858,64 @@
                     "items": {
                         "$ref": "#/definitions/domain.AdminInstance"
                     }
+                }
+            }
+        },
+        "http.AdminPreflightCheck": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                },
+                "severity": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "http.AdminPreflightResponse": {
+            "type": "object",
+            "properties": {
+                "backend": {
+                    "type": "string"
+                },
+                "checks": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/http.AdminPreflightCheck"
+                    }
+                },
+                "default_ingress_host": {
+                    "type": "string"
+                },
+                "development_auth": {
+                    "type": "boolean"
+                },
+                "readiness": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "recommendations": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "repository_driver": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
                 }
             }
         },
