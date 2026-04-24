@@ -128,6 +128,7 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 	if err != nil {
 		return nil, fmt.Errorf("init kubernetes backend: %w", err)
 	}
+	deploymentService.SetBackend(backend)
 
 	return &Runtime{
 		Config:            cfg,

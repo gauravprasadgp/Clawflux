@@ -50,6 +50,10 @@ type AdminInstanceListResponse struct {
 	Items []domain.AdminInstance `json:"items"`
 }
 
+type AdminBackendListResponse struct {
+	Items []domain.BackendCapabilities `json:"items"`
+}
+
 type AdminPreflightCheck struct {
 	ID       string `json:"id"`
 	Label    string `json:"label"`
@@ -59,14 +63,15 @@ type AdminPreflightCheck struct {
 }
 
 type AdminPreflightResponse struct {
-	Status             string                `json:"status"`
-	Backend            string                `json:"backend"`
-	RepositoryDriver   string                `json:"repository_driver"`
-	DevelopmentAuth    bool                  `json:"development_auth"`
-	DefaultIngressHost string                `json:"default_ingress_host"`
-	Readiness          map[string]string     `json:"readiness"`
-	Checks             []AdminPreflightCheck `json:"checks"`
-	Recommendations    []string              `json:"recommendations"`
+	Status             string                     `json:"status"`
+	Backend            string                     `json:"backend"`
+	RepositoryDriver   string                     `json:"repository_driver"`
+	DevelopmentAuth    bool                       `json:"development_auth"`
+	DefaultIngressHost string                     `json:"default_ingress_host"`
+	Capabilities       domain.BackendCapabilities `json:"capabilities"`
+	Readiness          map[string]string          `json:"readiness"`
+	Checks             []AdminPreflightCheck      `json:"checks"`
+	Recommendations    []string                   `json:"recommendations"`
 }
 
 type APIKeyCreateResultResponse struct {

@@ -118,6 +118,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/admin/backends": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "List configured deployment backends and capabilities",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Admin email",
+                        "name": "X-User-Email",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true",
+                        "name": "X-Platform-Admin",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.AdminBackendListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/admin/instances": {
             "get": {
                 "produces": [
@@ -972,6 +1019,76 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/apps/{appID}/deployments/plan": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Deployments"
+                ],
+                "summary": "Dry-run the next deployment for an app",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "App ID",
+                        "name": "appID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Tenant API key",
+                        "name": "X-API-Key",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Development/local user email",
+                        "name": "X-User-Email",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Display name",
+                        "name": "X-User-Name",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true for platform admin requests",
+                        "name": "X-Platform-Admin",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.DeploymentPlan"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/auth/medium/callback": {
             "get": {
                 "produces": [
@@ -1657,6 +1774,54 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.BackendCapabilities": {
+            "type": "object",
+            "properties": {
+                "capabilities": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.BackendCapability"
+                    }
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "domain.BackendCapability": {
+            "type": "string",
+            "enum": [
+                "deploy",
+                "delete",
+                "status",
+                "sync",
+                "domains",
+                "secrets",
+                "persistent_storage",
+                "replicas",
+                "dry_run"
+            ],
+            "x-enum-varnames": [
+                "BackendCapabilityDeploy",
+                "BackendCapabilityDelete",
+                "BackendCapabilityStatus",
+                "BackendCapabilitySync",
+                "BackendCapabilityDomains",
+                "BackendCapabilitySecrets",
+                "BackendCapabilityPersistentStorage",
+                "BackendCapabilityReplicas",
+                "BackendCapabilityDryRun"
+            ]
+        },
         "domain.BackendRef": {
             "type": "object",
             "properties": {
@@ -1747,6 +1912,59 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.DeploymentPlan": {
+            "type": "object",
+            "properties": {
+                "backend": {
+                    "type": "string"
+                },
+                "backend_ref": {
+                    "$ref": "#/definitions/domain.BackendRef"
+                },
+                "capabilities": {
+                    "$ref": "#/definitions/domain.BackendCapabilities"
+                },
+                "environment": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PlannedEnvVar"
+                    }
+                },
+                "exposure": {
+                    "$ref": "#/definitions/domain.PlannedExposure"
+                },
+                "image_ref": {
+                    "type": "string"
+                },
+                "resources": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PlannedResource"
+                    }
+                },
+                "secrets": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PlannedSecret"
+                    }
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "volumes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.PlannedVolume"
+                    }
+                },
+                "warnings": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "domain.DeploymentStatus": {
             "type": "string",
             "enum": [
@@ -1811,6 +2029,91 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.PlannedEnvVar": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PlannedExposure": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "type": "string"
+                },
+                "ingress_name": {
+                    "type": "string"
+                },
+                "port": {
+                    "type": "integer"
+                },
+                "public": {
+                    "type": "boolean"
+                },
+                "service_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PlannedResource": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "kind": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "namespace": {
+                    "type": "string"
+                },
+                "note": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PlannedSecret": {
+            "type": "object",
+            "properties": {
+                "keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "managed": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "domain.PlannedVolume": {
+            "type": "object",
+            "properties": {
+                "mount_path": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.Role": {
             "type": "string",
             "enum": [
@@ -1854,6 +2157,17 @@ const docTemplate = `{
                 }
             }
         },
+        "http.AdminBackendListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.BackendCapabilities"
+                    }
+                }
+            }
+        },
         "http.AdminInstanceListResponse": {
             "type": "object",
             "properties": {
@@ -1890,6 +2204,9 @@ const docTemplate = `{
             "properties": {
                 "backend": {
                     "type": "string"
+                },
+                "capabilities": {
+                    "$ref": "#/definitions/domain.BackendCapabilities"
                 },
                 "checks": {
                     "type": "array",

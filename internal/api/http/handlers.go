@@ -208,6 +208,34 @@ func (r *Router) listDeployments(w http.ResponseWriter, req *http.Request, appID
 	writeJSON(w, http.StatusOK, map[string]any{"items": deployments})
 }
 
+// planDeployment godoc
+// @Summary Dry-run the next deployment for an app
+// @Tags Deployments
+// @Produce json
+// @Param appID path string true "App ID"
+// @Param X-API-Key header string false "Tenant API key"
+// @Param X-User-Email header string false "Development/local user email"
+// @Param X-User-Name header string false "Display name"
+// @Param X-Platform-Admin header string false "Set to true for platform admin requests"
+// @Success 200 {object} domain.DeploymentPlan
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /v1/apps/{appID}/deployments/plan [get]
+func (r *Router) planDeployment(w http.ResponseWriter, req *http.Request, appID string) {
+	actor, err := actorFromContext(req.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	plan, err := r.deployments.PlanDeployment(req.Context(), actor, appID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, plan)
+}
+
 // getDeployment godoc
 // @Summary Get a deployment
 // @Tags Deployments
@@ -484,6 +512,31 @@ func (r *Router) handleAdminSummary(w http.ResponseWriter, req *http.Request) {
 	writeJSON(w, http.StatusOK, summary)
 }
 
+// handleAdminBackends godoc
+// @Summary List configured deployment backends and capabilities
+// @Tags Admin
+// @Produce json
+// @Param X-User-Email header string true "Admin email"
+// @Param X-Platform-Admin header string true "Set to true"
+// @Success 200 {object} AdminBackendListResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Router /v1/admin/backends [get]
+func (r *Router) handleAdminBackends(w http.ResponseWriter, req *http.Request) {
+	actor, err := actorFromContext(req.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if !actor.IsPlatformAdmin {
+		writeError(w, domain.ErrForbidden)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": []domain.BackendCapabilities{
+		r.deployments.BackendCapabilities(),
+	}})
+}
+
 // handleAdminPreflight godoc
 // @Summary Inspect runtime readiness and setup guidance
 // @Tags Admin
@@ -513,6 +566,7 @@ func (r *Router) handleAdminPreflight(w http.ResponseWriter, req *http.Request) 
 		DevelopmentAuth:    r.devAuth,
 		DefaultIngressHost: r.ingressHost,
 		Readiness:          readiness,
+		Capabilities:       r.deployments.BackendCapabilities(),
 	}
 
 	add := func(id, label, status, severity, message string) {

@@ -133,6 +133,43 @@ definitions:
       tenant_id:
         type: string
     type: object
+  domain.BackendCapabilities:
+    properties:
+      capabilities:
+        items:
+          $ref: '#/definitions/domain.BackendCapability'
+        type: array
+      display_name:
+        type: string
+      name:
+        type: string
+      notes:
+        items:
+          type: string
+        type: array
+    type: object
+  domain.BackendCapability:
+    enum:
+    - deploy
+    - delete
+    - status
+    - sync
+    - domains
+    - secrets
+    - persistent_storage
+    - replicas
+    - dry_run
+    type: string
+    x-enum-varnames:
+    - BackendCapabilityDeploy
+    - BackendCapabilityDelete
+    - BackendCapabilityStatus
+    - BackendCapabilitySync
+    - BackendCapabilityDomains
+    - BackendCapabilitySecrets
+    - BackendCapabilityPersistentStorage
+    - BackendCapabilityReplicas
+    - BackendCapabilityDryRun
   domain.BackendRef:
     properties:
       deployment:
@@ -192,6 +229,41 @@ definitions:
       type:
         type: string
     type: object
+  domain.DeploymentPlan:
+    properties:
+      backend:
+        type: string
+      backend_ref:
+        $ref: '#/definitions/domain.BackendRef'
+      capabilities:
+        $ref: '#/definitions/domain.BackendCapabilities'
+      environment:
+        items:
+          $ref: '#/definitions/domain.PlannedEnvVar'
+        type: array
+      exposure:
+        $ref: '#/definitions/domain.PlannedExposure'
+      image_ref:
+        type: string
+      resources:
+        items:
+          $ref: '#/definitions/domain.PlannedResource'
+        type: array
+      secrets:
+        items:
+          $ref: '#/definitions/domain.PlannedSecret'
+        type: array
+      version:
+        type: integer
+      volumes:
+        items:
+          $ref: '#/definitions/domain.PlannedVolume'
+        type: array
+      warnings:
+        items:
+          type: string
+        type: array
+    type: object
   domain.DeploymentStatus:
     enum:
     - requested
@@ -239,6 +311,61 @@ definitions:
       workspace_storage:
         type: string
     type: object
+  domain.PlannedEnvVar:
+    properties:
+      name:
+        type: string
+      source:
+        type: string
+    type: object
+  domain.PlannedExposure:
+    properties:
+      host:
+        type: string
+      ingress_name:
+        type: string
+      port:
+        type: integer
+      public:
+        type: boolean
+      service_name:
+        type: string
+    type: object
+  domain.PlannedResource:
+    properties:
+      action:
+        type: string
+      kind:
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+      note:
+        type: string
+    type: object
+  domain.PlannedSecret:
+    properties:
+      keys:
+        items:
+          type: string
+        type: array
+      managed:
+        type: boolean
+      name:
+        type: string
+    type: object
+  domain.PlannedVolume:
+    properties:
+      mount_path:
+        type: string
+      name:
+        type: string
+      size:
+        type: string
+      source:
+        type: string
+    type: object
   domain.Role:
     enum:
     - owner
@@ -268,6 +395,13 @@ definitions:
           $ref: '#/definitions/domain.APIKey'
         type: array
     type: object
+  http.AdminBackendListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/domain.BackendCapabilities'
+        type: array
+    type: object
   http.AdminInstanceListResponse:
     properties:
       items:
@@ -292,6 +426,8 @@ definitions:
     properties:
       backend:
         type: string
+      capabilities:
+        $ref: '#/definitions/domain.BackendCapabilities'
       checks:
         items:
           $ref: '#/definitions/http.AdminPreflightCheck'
@@ -525,6 +661,37 @@ paths:
       summary: List tenant audit logs
       tags:
       - Audit
+  /v1/admin/backends:
+    get:
+      parameters:
+      - description: Admin email
+        in: header
+        name: X-User-Email
+        required: true
+        type: string
+      - description: Set to true
+        in: header
+        name: X-Platform-Admin
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.AdminBackendListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List configured deployment backends and capabilities
+      tags:
+      - Admin
   /v1/admin/instances:
     get:
       parameters:
@@ -1084,6 +1251,52 @@ paths:
           schema:
             $ref: '#/definitions/http.ErrorResponse'
       summary: Create a deployment for an app
+      tags:
+      - Deployments
+  /v1/apps/{appID}/deployments/plan:
+    get:
+      parameters:
+      - description: App ID
+        in: path
+        name: appID
+        required: true
+        type: string
+      - description: Tenant API key
+        in: header
+        name: X-API-Key
+        type: string
+      - description: Development/local user email
+        in: header
+        name: X-User-Email
+        type: string
+      - description: Display name
+        in: header
+        name: X-User-Name
+        type: string
+      - description: Set to true for platform admin requests
+        in: header
+        name: X-Platform-Admin
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.DeploymentPlan'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Dry-run the next deployment for an app
       tags:
       - Deployments
   /v1/auth/medium/callback:

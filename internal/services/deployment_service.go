@@ -13,6 +13,8 @@ type DeploymentService struct {
 	deployments domain.DeploymentRepository
 	events      domain.EventRepository
 	scheduler   domain.Scheduler
+	backend     domain.DeploymentBackend
+	backendName string
 }
 
 func NewDeploymentService(apps domain.AppRepository, deployments domain.DeploymentRepository, events domain.EventRepository, scheduler domain.Scheduler) *DeploymentService {
@@ -21,7 +23,40 @@ func NewDeploymentService(apps domain.AppRepository, deployments domain.Deployme
 		deployments: deployments,
 		events:      events,
 		scheduler:   scheduler,
+		backendName: "kubernetes",
 	}
+}
+
+func (s *DeploymentService) SetBackend(backend domain.DeploymentBackend) {
+	s.backend = backend
+	if backend != nil {
+		s.backendName = backend.Name()
+	}
+}
+
+func (s *DeploymentService) BackendCapabilities() domain.BackendCapabilities {
+	if s.backend == nil {
+		return domain.BackendCapabilities{Name: s.backendName, DisplayName: s.backendName}
+	}
+	return s.backend.Capabilities()
+}
+
+func (s *DeploymentService) PlanDeployment(ctx context.Context, actor domain.Actor, appID string) (*domain.DeploymentPlan, error) {
+	if s.backend == nil {
+		return nil, domain.ErrValidation
+	}
+	app, err := s.apps.GetByID(ctx, actor.TenantID, appID)
+	if err != nil {
+		return nil, err
+	}
+	version, err := s.deployments.NextVersion(ctx, actor.TenantID, appID)
+	if err != nil {
+		return nil, err
+	}
+	return s.backend.Plan(ctx, domain.BackendPlanRequest{
+		App:         *app,
+		NextVersion: version,
+	})
 }
 
 func (s *DeploymentService) CreateDeployment(ctx context.Context, actor domain.Actor, appID string) (*domain.Deployment, error) {
@@ -43,7 +78,7 @@ func (s *DeploymentService) CreateDeployment(ctx context.Context, actor domain.A
 		ImageRef:       app.Config.Image,
 		ConfigSnapshot: app.Config,
 		Status:         domain.DeploymentStatusQueued,
-		Backend:        "kubernetes",
+		Backend:        s.backendName,
 		RequestedBy:    actor.UserID,
 		CreatedAt:      now,
 		UpdatedAt:      now,

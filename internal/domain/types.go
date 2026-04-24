@@ -17,8 +17,8 @@ var (
 type Role string
 
 const (
-	RoleOwner Role = "owner"
-	RoleAdmin Role = "admin"
+	RoleOwner  Role = "owner"
+	RoleAdmin  Role = "admin"
 	RoleMember Role = "member"
 )
 
@@ -99,16 +99,16 @@ type AppConfig struct {
 }
 
 type OpenClawConfig struct {
-	Enabled             bool              `json:"enabled"`
-	GatewayBindAddress  string            `json:"gateway_bind_address,omitempty"`
-	GatewayPort         int               `json:"gateway_port,omitempty"`
-	GatewayToken        string            `json:"gateway_token,omitempty"`
-	WorkspaceStorage    string            `json:"workspace_storage,omitempty"`
-	ProviderAPIKeys     map[string]string `json:"provider_api_keys,omitempty"`
-	AgentsMarkdown      string            `json:"agents_markdown,omitempty"`
-	SettingsJSON        string            `json:"settings_json,omitempty"`
-	ExtraEnv            map[string]string `json:"extra_env,omitempty"`
-	ExistingSecretName  string            `json:"existing_secret_name,omitempty"`
+	Enabled            bool              `json:"enabled"`
+	GatewayBindAddress string            `json:"gateway_bind_address,omitempty"`
+	GatewayPort        int               `json:"gateway_port,omitempty"`
+	GatewayToken       string            `json:"gateway_token,omitempty"`
+	WorkspaceStorage   string            `json:"workspace_storage,omitempty"`
+	ProviderAPIKeys    map[string]string `json:"provider_api_keys,omitempty"`
+	AgentsMarkdown     string            `json:"agents_markdown,omitempty"`
+	SettingsJSON       string            `json:"settings_json,omitempty"`
+	ExtraEnv           map[string]string `json:"extra_env,omitempty"`
+	ExistingSecretName string            `json:"existing_secret_name,omitempty"`
 }
 
 type Deployment struct {
@@ -136,6 +136,80 @@ type BackendRef struct {
 	IngressName string `json:"ingress_name,omitempty"`
 }
 
+type BackendCapability string
+
+const (
+	BackendCapabilityDeploy            BackendCapability = "deploy"
+	BackendCapabilityDelete            BackendCapability = "delete"
+	BackendCapabilityStatus            BackendCapability = "status"
+	BackendCapabilitySync              BackendCapability = "sync"
+	BackendCapabilityDomains           BackendCapability = "domains"
+	BackendCapabilitySecrets           BackendCapability = "secrets"
+	BackendCapabilityPersistentStorage BackendCapability = "persistent_storage"
+	BackendCapabilityReplicas          BackendCapability = "replicas"
+	BackendCapabilityDryRun            BackendCapability = "dry_run"
+)
+
+type BackendCapabilities struct {
+	Name         string              `json:"name"`
+	DisplayName  string              `json:"display_name"`
+	Capabilities []BackendCapability `json:"capabilities"`
+	Notes        []string            `json:"notes,omitempty"`
+}
+
+type BackendPlanRequest struct {
+	App         App
+	NextVersion int
+}
+
+type DeploymentPlan struct {
+	Backend      string              `json:"backend"`
+	Version      int                 `json:"version"`
+	ImageRef     string              `json:"image_ref"`
+	BackendRef   BackendRef          `json:"backend_ref"`
+	Capabilities BackendCapabilities `json:"capabilities"`
+	Resources    []PlannedResource   `json:"resources"`
+	Environment  []PlannedEnvVar     `json:"environment"`
+	Secrets      []PlannedSecret     `json:"secrets"`
+	Volumes      []PlannedVolume     `json:"volumes"`
+	Exposure     PlannedExposure     `json:"exposure"`
+	Warnings     []string            `json:"warnings,omitempty"`
+}
+
+type PlannedResource struct {
+	Kind      string `json:"kind"`
+	Name      string `json:"name"`
+	Namespace string `json:"namespace,omitempty"`
+	Action    string `json:"action"`
+	Note      string `json:"note,omitempty"`
+}
+
+type PlannedEnvVar struct {
+	Name   string `json:"name"`
+	Source string `json:"source"`
+}
+
+type PlannedSecret struct {
+	Name    string   `json:"name"`
+	Keys    []string `json:"keys"`
+	Managed bool     `json:"managed"`
+}
+
+type PlannedVolume struct {
+	Name      string `json:"name"`
+	Source    string `json:"source"`
+	MountPath string `json:"mount_path"`
+	Size      string `json:"size,omitempty"`
+}
+
+type PlannedExposure struct {
+	Public      bool   `json:"public"`
+	Host        string `json:"host,omitempty"`
+	ServiceName string `json:"service_name"`
+	Port        int    `json:"port"`
+	IngressName string `json:"ingress_name,omitempty"`
+}
+
 type DeploymentEvent struct {
 	ID           string    `json:"id"`
 	DeploymentID string    `json:"deployment_id"`
@@ -159,15 +233,15 @@ type APIKey struct {
 }
 
 type AuthIdentity struct {
-	ID                 string            `json:"id"`
-	UserID             string            `json:"user_id"`
-	Provider           string            `json:"provider"`
-	ProviderUserID     string            `json:"provider_user_id"`
-	AccessToken        string            `json:"-"`
-	RefreshToken       string            `json:"-"`
-	Metadata           map[string]string `json:"metadata"`
-	CreatedAt          time.Time         `json:"created_at"`
-	UpdatedAt          time.Time         `json:"updated_at"`
+	ID             string            `json:"id"`
+	UserID         string            `json:"user_id"`
+	Provider       string            `json:"provider"`
+	ProviderUserID string            `json:"provider_user_id"`
+	AccessToken    string            `json:"-"`
+	RefreshToken   string            `json:"-"`
+	Metadata       map[string]string `json:"metadata"`
+	CreatedAt      time.Time         `json:"created_at"`
+	UpdatedAt      time.Time         `json:"updated_at"`
 }
 
 type ExternalIdentity struct {
@@ -224,6 +298,8 @@ type BackendStatus struct {
 
 type DeploymentBackend interface {
 	Name() string
+	Capabilities() BackendCapabilities
+	Plan(ctx context.Context, req BackendPlanRequest) (*DeploymentPlan, error)
 	Submit(ctx context.Context, req BackendDeployRequest) (*BackendStatus, error)
 	Delete(ctx context.Context, ref BackendRef) error
 	GetStatus(ctx context.Context, ref BackendRef) (*BackendStatus, error)

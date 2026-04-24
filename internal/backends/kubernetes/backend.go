@@ -50,6 +50,36 @@ func NewBackend() (*Backend, error) {
 
 func (b *Backend) Name() string { return "kubernetes" }
 
+func (b *Backend) Capabilities() domain.BackendCapabilities {
+	return Capabilities()
+}
+
+func Capabilities() domain.BackendCapabilities {
+	return domain.BackendCapabilities{
+		Name:        "kubernetes",
+		DisplayName: "Kubernetes",
+		Capabilities: []domain.BackendCapability{
+			domain.BackendCapabilityDeploy,
+			domain.BackendCapabilityDelete,
+			domain.BackendCapabilityStatus,
+			domain.BackendCapabilitySync,
+			domain.BackendCapabilityDomains,
+			domain.BackendCapabilitySecrets,
+			domain.BackendCapabilityPersistentStorage,
+			domain.BackendCapabilityReplicas,
+			domain.BackendCapabilityDryRun,
+		},
+		Notes: []string{
+			"Creates one namespace per tenant.",
+			"Applies Deployment, Service, optional Ingress, PVC, ConfigMap, and Secret resources.",
+		},
+	}
+}
+
+func (b *Backend) Plan(_ context.Context, req domain.BackendPlanRequest) (*domain.DeploymentPlan, error) {
+	return BuildPlan(req.App, req.NextVersion, b.Capabilities()), nil
+}
+
 func (b *Backend) Submit(ctx context.Context, req domain.BackendDeployRequest) (*domain.BackendStatus, error) {
 	ns := namespaceForTenant(req.App.TenantID)
 	name := resourceName(req.App.Slug, req.Deployment.Version)

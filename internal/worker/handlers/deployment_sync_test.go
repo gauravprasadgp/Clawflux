@@ -19,6 +19,14 @@ func (b *syncBackend) Name() string {
 	return "kubernetes"
 }
 
+func (b *syncBackend) Capabilities() domain.BackendCapabilities {
+	return domain.BackendCapabilities{Name: "kubernetes", DisplayName: "Kubernetes"}
+}
+
+func (b *syncBackend) Plan(context.Context, domain.BackendPlanRequest) (*domain.DeploymentPlan, error) {
+	return nil, nil
+}
+
 func (b *syncBackend) Submit(context.Context, domain.BackendDeployRequest) (*domain.BackendStatus, error) {
 	return nil, nil
 }

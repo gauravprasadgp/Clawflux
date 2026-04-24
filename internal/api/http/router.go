@@ -63,6 +63,7 @@ func NewRouter(logger *slog.Logger, devAuth bool, repository string, backend str
 	mux.HandleFunc("/v1/api-keys/", r.withMiddleware(r.withActor(r.handleAPIKeyRoutes)))
 	mux.HandleFunc("/v1/admin/instances", r.withMiddleware(r.withActor(r.handleAdminInstances)))
 	mux.HandleFunc("/v1/admin/summary", r.withMiddleware(r.withActor(r.handleAdminSummary)))
+	mux.HandleFunc("/v1/admin/backends", r.withMiddleware(r.withActor(r.handleAdminBackends)))
 	mux.HandleFunc("/v1/admin/preflight", r.withMiddleware(r.withActor(r.handleAdminPreflight)))
 	mux.HandleFunc("/v1/admin/audit-logs", r.withMiddleware(r.withActor(r.handleAuditLogs)))
 	mux.HandleFunc("/v1/admin/users", r.withMiddleware(r.withActor(r.handleAdminUsers)))
@@ -170,6 +171,10 @@ func (r *Router) handleAppRoutes(w http.ResponseWriter, req *http.Request) {
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
+		return
+	}
+	if len(parts) == 3 && parts[1] == "deployments" && parts[2] == "plan" && req.Method == http.MethodGet {
+		r.planDeployment(w, req, parts[0])
 		return
 	}
 	http.NotFound(w, req)
