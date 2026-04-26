@@ -41,9 +41,6 @@ func NewRouter(logger *slog.Logger, devAuth bool, repository string, backend str
 
 	mux := http.NewServeMux()
 
-	// Legacy HTML admin UI
-	mux.HandleFunc("/admin", r.handleAdminUI)
-	mux.HandleFunc("/admin/", r.handleAdminUI)
 	mux.HandleFunc("/healthz", r.handleHealth)
 	mux.HandleFunc("/readyz", r.handleReady)
 	mux.HandleFunc("/swagger", r.handleSwaggerUI)

@@ -50,10 +50,10 @@ Swagger UI will then be available at:
 http://localhost:8080/swagger/
 ```
 
-Admin UI is available at:
+The React admin UI is available from the Vite dev server at:
 
 ```text
-http://localhost:8080/admin/
+http://localhost:5173/
 ```
 
 Example admin OpenClaw deploy API call:

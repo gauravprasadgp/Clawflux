@@ -157,7 +157,7 @@ cmd/
   worker/     → Job queue consumer entrypoint
   migrate/    → Database migration runner
 internal/
-  api/http/   → Router, handlers, middleware, admin UI
+  api/http/   → Router, handlers, middleware, Swagger UI
   services/   → Business logic (app, deployment, auth, admin)
   domain/     → Types, interfaces, errors
   backends/

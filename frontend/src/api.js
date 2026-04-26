@@ -49,7 +49,4 @@ export const api = {
   retryDeployment: (id) => request('POST', `/v1/deployments/${id}/retry`),
   cancelDeployment: (id) => request('POST', `/v1/deployments/${id}/cancel`),
   deleteDeployment: (id) => request('POST', `/v1/deployments/${id}/delete`),
-
-  getApp: (id) => request('GET', `/v1/apps/${id}`),
-  listDeployments: (appId) => request('GET', `/v1/apps/${appId}/deployments`),
 }
