@@ -165,6 +165,113 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/admin/dead-letters": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "List dead-letter jobs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Admin email",
+                        "name": "X-User-Email",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true",
+                        "name": "X-Platform-Admin",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/http.DeadLetterListResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/dead-letters/{deadLetterID}/replay": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Replay a dead-letter job",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Dead-letter ID",
+                        "name": "deadLetterID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Admin email",
+                        "name": "X-User-Email",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true",
+                        "name": "X-Platform-Admin",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/domain.Job"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/admin/instances": {
             "get": {
                 "produces": [
@@ -307,6 +414,100 @@ const docTemplate = `{
                         "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/http.AdminPreflightResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/reconcile": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Queue reconciliation work for active deployments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Admin email",
+                        "name": "X-User-Email",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true",
+                        "name": "X-Platform-Admin",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.ReconcileResult"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/http.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/admin/reliability": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin"
+                ],
+                "summary": "Get reliability queue status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Admin email",
+                        "name": "X-User-Email",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Set to true",
+                        "name": "X-Platform-Admin",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.ReliabilityStatus"
                         }
                     },
                     "401": {
@@ -1734,6 +1935,9 @@ const docTemplate = `{
                 "public": {
                     "type": "boolean"
                 },
+                "reliability": {
+                    "$ref": "#/definitions/domain.ReliabilityPolicy"
+                },
                 "replicas": {
                     "type": "integer"
                 },
@@ -1839,6 +2043,26 @@ const docTemplate = `{
                 }
             }
         },
+        "domain.DeadLetterJob": {
+            "type": "object",
+            "properties": {
+                "failed_at": {
+                    "type": "string"
+                },
+                "final_attempt": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "job": {
+                    "$ref": "#/definitions/domain.Job"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.Deployment": {
             "type": "object",
             "properties": {
@@ -1865,6 +2089,9 @@ const docTemplate = `{
                 },
                 "image_ref": {
                     "type": "string"
+                },
+                "repair_attempts": {
+                    "type": "integer"
                 },
                 "requested_by": {
                     "type": "string"
@@ -1972,6 +2199,8 @@ const docTemplate = `{
                 "queued",
                 "provisioning",
                 "running",
+                "degraded",
+                "recovering",
                 "failed",
                 "cancelled",
                 "deleting",
@@ -1982,10 +2211,80 @@ const docTemplate = `{
                 "DeploymentStatusQueued",
                 "DeploymentStatusProvisioning",
                 "DeploymentStatusRunning",
+                "DeploymentStatusDegraded",
+                "DeploymentStatusRecovering",
                 "DeploymentStatusFailed",
                 "DeploymentStatusCancelled",
                 "DeploymentStatusDeleting",
                 "DeploymentStatusDeleted"
+            ]
+        },
+        "domain.InferenceFallbackProvider": {
+            "type": "object",
+            "properties": {
+                "base_url": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "timeout_seconds": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.Job": {
+            "type": "object",
+            "properties": {
+                "app_id": {
+                    "type": "string"
+                },
+                "attempts": {
+                    "type": "integer"
+                },
+                "available_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "deployment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "last_error": {
+                    "type": "string"
+                },
+                "leased_at": {
+                    "type": "string"
+                },
+                "tenant_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "$ref": "#/definitions/domain.JobType"
+                }
+            }
+        },
+        "domain.JobType": {
+            "type": "string",
+            "enum": [
+                "deployment.create",
+                "deployment.delete",
+                "deployment.sync"
+            ],
+            "x-enum-varnames": [
+                "JobTypeDeploymentCreate",
+                "JobTypeDeploymentDelete",
+                "JobTypeDeploymentSync"
             ]
         },
         "domain.OpenClawConfig": {
@@ -2111,6 +2410,49 @@ const docTemplate = `{
                 },
                 "source": {
                     "type": "string"
+                }
+            }
+        },
+        "domain.QueueStats": {
+            "type": "object",
+            "properties": {
+                "dead_letters": {
+                    "type": "integer"
+                },
+                "delayed": {
+                    "type": "integer"
+                },
+                "processing": {
+                    "type": "integer"
+                },
+                "ready": {
+                    "type": "integer"
+                }
+            }
+        },
+        "domain.ReliabilityPolicy": {
+            "type": "object",
+            "properties": {
+                "auto_repair": {
+                    "type": "boolean"
+                },
+                "fallback_providers": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.InferenceFallbackProvider"
+                    }
+                },
+                "health_check_path": {
+                    "type": "string"
+                },
+                "health_check_timeout_seconds": {
+                    "type": "integer"
+                },
+                "max_repair_attempts": {
+                    "type": "integer"
+                },
+                "rollback_on_failed_healthcheck": {
+                    "type": "boolean"
                 }
             }
         },
@@ -2273,6 +2615,17 @@ const docTemplate = `{
                 }
             }
         },
+        "http.DeadLetterListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/domain.DeadLetterJob"
+                    }
+                }
+            }
+        },
         "http.DeploymentEventListResponse": {
             "type": "object",
             "properties": {
@@ -2429,6 +2782,28 @@ const docTemplate = `{
                 },
                 "slug": {
                     "type": "string"
+                }
+            }
+        },
+        "services.ReconcileResult": {
+            "type": "object",
+            "properties": {
+                "scanned": {
+                    "type": "integer"
+                },
+                "scheduled": {
+                    "type": "integer"
+                },
+                "skipped": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.ReliabilityStatus": {
+            "type": "object",
+            "properties": {
+                "queue": {
+                    "$ref": "#/definitions/domain.QueueStats"
                 }
             }
         },

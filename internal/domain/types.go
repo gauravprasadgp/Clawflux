@@ -29,6 +29,8 @@ const (
 	DeploymentStatusQueued       DeploymentStatus = "queued"
 	DeploymentStatusProvisioning DeploymentStatus = "provisioning"
 	DeploymentStatusRunning      DeploymentStatus = "running"
+	DeploymentStatusDegraded     DeploymentStatus = "degraded"
+	DeploymentStatusRecovering   DeploymentStatus = "recovering"
 	DeploymentStatusFailed       DeploymentStatus = "failed"
 	DeploymentStatusCancelled    DeploymentStatus = "cancelled"
 	DeploymentStatusDeleting     DeploymentStatus = "deleting"
@@ -96,6 +98,7 @@ type AppConfig struct {
 	Domain             string            `json:"domain,omitempty"`
 	ServiceAccountName string            `json:"service_account_name,omitempty"`
 	OpenClaw           *OpenClawConfig   `json:"openclaw,omitempty"`
+	Reliability        ReliabilityPolicy `json:"reliability"`
 }
 
 type OpenClawConfig struct {
@@ -111,6 +114,23 @@ type OpenClawConfig struct {
 	ExistingSecretName string            `json:"existing_secret_name,omitempty"`
 }
 
+type ReliabilityPolicy struct {
+	AutoRepair                  bool                        `json:"auto_repair"`
+	MaxRepairAttempts           int                         `json:"max_repair_attempts"`
+	HealthCheckPath             string                      `json:"health_check_path,omitempty"`
+	HealthCheckTimeoutSeconds   int                         `json:"health_check_timeout_seconds,omitempty"`
+	RollbackOnFailedHealthCheck bool                        `json:"rollback_on_failed_healthcheck"`
+	FallbackProviders           []InferenceFallbackProvider `json:"fallback_providers,omitempty"`
+}
+
+type InferenceFallbackProvider struct {
+	Name           string `json:"name"`
+	Model          string `json:"model,omitempty"`
+	BaseURL        string `json:"base_url,omitempty"`
+	Priority       int    `json:"priority"`
+	TimeoutSeconds int    `json:"timeout_seconds,omitempty"`
+}
+
 type Deployment struct {
 	ID             string           `json:"id"`
 	TenantID       string           `json:"tenant_id"`
@@ -123,6 +143,7 @@ type Deployment struct {
 	Backend        string           `json:"backend"`
 	BackendRef     BackendRef       `json:"backend_ref"`
 	RequestedBy    string           `json:"requested_by"`
+	RepairAttempts int              `json:"repair_attempts"`
 	StartedAt      *time.Time       `json:"started_at,omitempty"`
 	FinishedAt     *time.Time       `json:"finished_at,omitempty"`
 	CreatedAt      time.Time        `json:"created_at"`
@@ -321,11 +342,52 @@ type Job struct {
 	DeploymentID string    `json:"deployment_id,omitempty"`
 	Attempts     int       `json:"attempts"`
 	CreatedAt    time.Time `json:"created_at"`
+	AvailableAt  time.Time `json:"available_at,omitempty"`
+	LeasedAt     time.Time `json:"leased_at,omitempty"`
+	LastError    string    `json:"last_error,omitempty"`
 }
 
 type JobQueue interface {
 	Enqueue(ctx context.Context, job Job) error
 	Dequeue(ctx context.Context) (Job, error)
+}
+
+type JobAcker interface {
+	Ack(ctx context.Context, job Job) error
+}
+
+type JobScheduler interface {
+	EnqueueAfter(ctx context.Context, job Job, delay time.Duration) error
+	PromoteDue(ctx context.Context, limit int) (int, error)
+}
+
+type JobLeaseReclaimer interface {
+	ReclaimStale(ctx context.Context, staleAfter time.Duration, limit int) (int, error)
+}
+
+type DeadLetterJob struct {
+	ID           string    `json:"id"`
+	Job          Job       `json:"job"`
+	Reason       string    `json:"reason"`
+	FailedAt     time.Time `json:"failed_at"`
+	FinalAttempt int       `json:"final_attempt"`
+}
+
+type DeadLetterQueue interface {
+	DeadLetter(ctx context.Context, item DeadLetterJob) error
+	ListDeadLetters(ctx context.Context, limit int) ([]DeadLetterJob, error)
+	ReplayDeadLetter(ctx context.Context, id string) (*Job, error)
+}
+
+type QueueStats struct {
+	Ready       int `json:"ready"`
+	Processing  int `json:"processing"`
+	Delayed     int `json:"delayed"`
+	DeadLetters int `json:"dead_letters"`
+}
+
+type JobQueueInspector interface {
+	Stats(ctx context.Context) (*QueueStats, error)
 }
 
 type HealthChecker interface {
@@ -366,6 +428,7 @@ type DeploymentRepository interface {
 	Update(ctx context.Context, deployment *Deployment) error
 	GetByID(ctx context.Context, tenantID, deploymentID string) (*Deployment, error)
 	ListByApp(ctx context.Context, tenantID, appID string) ([]Deployment, error)
+	ListActive(ctx context.Context, limit int) ([]Deployment, error)
 	NextVersion(ctx context.Context, tenantID, appID string) (int, error)
 }
 

@@ -29,6 +29,7 @@ func main() {
 	defer runtime.Close()
 
 	runtime.Logger.Info("clawflux worker starting", "queue", cfg.RedisQueue)
+	go runtime.RunReconciler(ctx)
 
 	if err := runtime.Worker().Run(ctx); err != nil && err != context.Canceled {
 		runtime.Logger.Error("worker exited with error", "error", err)

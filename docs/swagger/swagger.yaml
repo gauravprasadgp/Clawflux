@@ -107,6 +107,8 @@ definitions:
         type: integer
       public:
         type: boolean
+      reliability:
+        $ref: '#/definitions/domain.ReliabilityPolicy'
       replicas:
         type: integer
       service_account_name:
@@ -181,6 +183,19 @@ definitions:
       service:
         type: string
     type: object
+  domain.DeadLetterJob:
+    properties:
+      failed_at:
+        type: string
+      final_attempt:
+        type: integer
+      id:
+        type: string
+      job:
+        $ref: '#/definitions/domain.Job'
+      reason:
+        type: string
+    type: object
   domain.Deployment:
     properties:
       app_id:
@@ -199,6 +214,8 @@ definitions:
         type: string
       image_ref:
         type: string
+      repair_attempts:
+        type: integer
       requested_by:
         type: string
       started_at:
@@ -270,6 +287,8 @@ definitions:
     - queued
     - provisioning
     - running
+    - degraded
+    - recovering
     - failed
     - cancelled
     - deleting
@@ -280,10 +299,58 @@ definitions:
     - DeploymentStatusQueued
     - DeploymentStatusProvisioning
     - DeploymentStatusRunning
+    - DeploymentStatusDegraded
+    - DeploymentStatusRecovering
     - DeploymentStatusFailed
     - DeploymentStatusCancelled
     - DeploymentStatusDeleting
     - DeploymentStatusDeleted
+  domain.InferenceFallbackProvider:
+    properties:
+      base_url:
+        type: string
+      model:
+        type: string
+      name:
+        type: string
+      priority:
+        type: integer
+      timeout_seconds:
+        type: integer
+    type: object
+  domain.Job:
+    properties:
+      app_id:
+        type: string
+      attempts:
+        type: integer
+      available_at:
+        type: string
+      created_at:
+        type: string
+      deployment_id:
+        type: string
+      id:
+        type: string
+      last_error:
+        type: string
+      leased_at:
+        type: string
+      tenant_id:
+        type: string
+      type:
+        $ref: '#/definitions/domain.JobType'
+    type: object
+  domain.JobType:
+    enum:
+    - deployment.create
+    - deployment.delete
+    - deployment.sync
+    type: string
+    x-enum-varnames:
+    - JobTypeDeploymentCreate
+    - JobTypeDeploymentDelete
+    - JobTypeDeploymentSync
   domain.OpenClawConfig:
     properties:
       agents_markdown:
@@ -365,6 +432,34 @@ definitions:
         type: string
       source:
         type: string
+    type: object
+  domain.QueueStats:
+    properties:
+      dead_letters:
+        type: integer
+      delayed:
+        type: integer
+      processing:
+        type: integer
+      ready:
+        type: integer
+    type: object
+  domain.ReliabilityPolicy:
+    properties:
+      auto_repair:
+        type: boolean
+      fallback_providers:
+        items:
+          $ref: '#/definitions/domain.InferenceFallbackProvider'
+        type: array
+      health_check_path:
+        type: string
+      health_check_timeout_seconds:
+        type: integer
+      max_repair_attempts:
+        type: integer
+      rollback_on_failed_healthcheck:
+        type: boolean
     type: object
   domain.Role:
     enum:
@@ -470,6 +565,13 @@ definitions:
           type: string
         type: array
     type: object
+  http.DeadLetterListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/domain.DeadLetterJob'
+        type: array
+    type: object
   http.DeploymentEventListResponse:
     properties:
       items:
@@ -572,6 +674,20 @@ definitions:
         type: string
       slug:
         type: string
+    type: object
+  services.ReconcileResult:
+    properties:
+      scanned:
+        type: integer
+      scheduled:
+        type: integer
+      skipped:
+        type: integer
+    type: object
+  services.ReliabilityStatus:
+    properties:
+      queue:
+        $ref: '#/definitions/domain.QueueStats'
     type: object
   services.UpdateAppInput:
     properties:
@@ -692,6 +808,77 @@ paths:
       summary: List configured deployment backends and capabilities
       tags:
       - Admin
+  /v1/admin/dead-letters:
+    get:
+      parameters:
+      - description: Admin email
+        in: header
+        name: X-User-Email
+        required: true
+        type: string
+      - description: Set to true
+        in: header
+        name: X-Platform-Admin
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/http.DeadLetterListResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: List dead-letter jobs
+      tags:
+      - Admin
+  /v1/admin/dead-letters/{deadLetterID}/replay:
+    post:
+      parameters:
+      - description: Dead-letter ID
+        in: path
+        name: deadLetterID
+        required: true
+        type: string
+      - description: Admin email
+        in: header
+        name: X-User-Email
+        required: true
+        type: string
+      - description: Set to true
+        in: header
+        name: X-Platform-Admin
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/domain.Job'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Replay a dead-letter job
+      tags:
+      - Admin
   /v1/admin/instances:
     get:
       parameters:
@@ -795,6 +982,68 @@ paths:
           schema:
             $ref: '#/definitions/http.ErrorResponse'
       summary: Inspect runtime readiness and setup guidance
+      tags:
+      - Admin
+  /v1/admin/reconcile:
+    post:
+      parameters:
+      - description: Admin email
+        in: header
+        name: X-User-Email
+        required: true
+        type: string
+      - description: Set to true
+        in: header
+        name: X-Platform-Admin
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.ReconcileResult'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Queue reconciliation work for active deployments
+      tags:
+      - Admin
+  /v1/admin/reliability:
+    get:
+      parameters:
+      - description: Admin email
+        in: header
+        name: X-User-Email
+        required: true
+        type: string
+      - description: Set to true
+        in: header
+        name: X-Platform-Admin
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.ReliabilityStatus'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/http.ErrorResponse'
+      summary: Get reliability queue status
       tags:
       - Admin
   /v1/admin/summary:

@@ -709,7 +709,8 @@ pre {
 }
 
 .badge-provisioning,
-.badge-deleting {
+.badge-deleting,
+.badge-recovering {
   background: var(--warn-soft);
   color: var(--warn);
   border-color: rgba(255, 211, 123, 0.22);
@@ -726,6 +727,12 @@ pre {
   background: var(--danger-soft);
   color: var(--danger);
   border-color: rgba(255, 143, 139, 0.24);
+}
+
+.badge-degraded {
+  background: rgba(255, 211, 123, 0.14);
+  color: var(--warn);
+  border-color: rgba(255, 211, 123, 0.28);
 }
 
 .badge-deleted,

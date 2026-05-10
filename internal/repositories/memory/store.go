@@ -390,6 +390,31 @@ func (r *DeploymentRepo) ListByApp(_ context.Context, tenantID, appID string) ([
 	return out, nil
 }
 
+func (r *DeploymentRepo) ListActive(_ context.Context, limit int) ([]domain.Deployment, error) {
+	r.state.mu.RLock()
+	defer r.state.mu.RUnlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	out := make([]domain.Deployment, 0)
+	for _, deployment := range r.state.deployments {
+		switch deployment.Status {
+		case domain.DeploymentStatusQueued,
+			domain.DeploymentStatusProvisioning,
+			domain.DeploymentStatusRunning,
+			domain.DeploymentStatusDegraded,
+			domain.DeploymentStatusRecovering,
+			domain.DeploymentStatusDeleting:
+			out = append(out, *deployment)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.Before(out[j].UpdatedAt) })
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
 func (r *DeploymentRepo) NextVersion(_ context.Context, tenantID, appID string) (int, error) {
 	r.state.mu.Lock()
 	defer r.state.mu.Unlock()

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"time"
 
 	"github.com/gauravprasad/clawcontrol/internal/domain"
 )
@@ -14,11 +13,13 @@ type DeploymentSyncHandler struct {
 	scheduler   domain.Scheduler
 	service     interface {
 		MarkDeploymentStatus(ctx context.Context, deployment *domain.Deployment, status domain.DeploymentStatus, reason string) error
+		QueueAutoRepair(ctx context.Context, deployment *domain.Deployment, reason string) error
 	}
 }
 
 func NewDeploymentSyncHandler(apps domain.AppRepository, deployments domain.DeploymentRepository, backend domain.DeploymentBackend, service interface {
 	MarkDeploymentStatus(ctx context.Context, deployment *domain.Deployment, status domain.DeploymentStatus, reason string) error
+	QueueAutoRepair(ctx context.Context, deployment *domain.Deployment, reason string) error
 }, scheduler domain.Scheduler) *DeploymentSyncHandler {
 	return &DeploymentSyncHandler{
 		apps:        apps,
@@ -45,12 +46,15 @@ func (h *DeploymentSyncHandler) Handle(ctx context.Context, job domain.Job) erro
 		return err
 	}
 	deployment.BackendRef = status.Ref
+	if status.Status == domain.DeploymentStatusFailed {
+		if err := h.service.QueueAutoRepair(ctx, deployment, status.Reason); err == nil {
+			return nil
+		}
+	}
 	if err := h.service.MarkDeploymentStatus(ctx, deployment, status.Status, status.Reason); err != nil {
 		return err
 	}
-	if status.Status == domain.DeploymentStatusProvisioning {
-		// Current queue does not support delayed jobs, so pause briefly before re-queueing.
-		time.Sleep(2 * time.Second)
+	if status.Status == domain.DeploymentStatusProvisioning || status.Status == domain.DeploymentStatusDegraded || status.Status == domain.DeploymentStatusRecovering {
 		return h.scheduler.ScheduleSync(ctx, deployment)
 	}
 	if status.Status != domain.DeploymentStatusRunning {

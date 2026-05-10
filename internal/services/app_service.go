@@ -143,6 +143,28 @@ func normalizeConfig(cfg domain.AppConfig) domain.AppConfig {
 	if cfg.Env == nil {
 		cfg.Env = map[string]string{}
 	}
+	cfg.Reliability = normalizeReliability(cfg.Reliability)
 
 	return cfg
+}
+
+func normalizeReliability(policy domain.ReliabilityPolicy) domain.ReliabilityPolicy {
+	if !policy.AutoRepair && policy.MaxRepairAttempts == 0 && policy.HealthCheckPath == "" && len(policy.FallbackProviders) == 0 {
+		policy.AutoRepair = true
+	}
+	if policy.MaxRepairAttempts <= 0 {
+		policy.MaxRepairAttempts = 3
+	}
+	if policy.HealthCheckTimeoutSeconds <= 0 {
+		policy.HealthCheckTimeoutSeconds = 3
+	}
+	for i := range policy.FallbackProviders {
+		if policy.FallbackProviders[i].Priority <= 0 {
+			policy.FallbackProviders[i].Priority = i + 1
+		}
+		if policy.FallbackProviders[i].TimeoutSeconds <= 0 {
+			policy.FallbackProviders[i].TimeoutSeconds = 20
+		}
+	}
+	return policy
 }

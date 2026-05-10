@@ -125,6 +125,7 @@ func (s *DeploymentService) RetryDeployment(ctx context.Context, actor domain.Ac
 	deployment.Status = domain.DeploymentStatusQueued
 	deployment.StatusReason = ""
 	deployment.FinishedAt = nil
+	deployment.RepairAttempts = 0
 	deployment.UpdatedAt = time.Now().UTC()
 	if err := s.deployments.Update(ctx, deployment); err != nil {
 		return nil, err
@@ -143,6 +144,40 @@ func (s *DeploymentService) RetryDeployment(ctx context.Context, actor domain.Ac
 		return nil, err
 	}
 	return deployment, nil
+}
+
+func (s *DeploymentService) QueueAutoRepair(ctx context.Context, deployment *domain.Deployment, reason string) error {
+	policy := normalizeReliability(deployment.ConfigSnapshot.Reliability)
+	if !policy.AutoRepair {
+		return domain.ErrValidation
+	}
+	if policy.MaxRepairAttempts <= 0 {
+		policy.MaxRepairAttempts = 3
+	}
+	if deployment.RepairAttempts >= policy.MaxRepairAttempts {
+		return s.MarkDeploymentStatus(ctx, deployment, domain.DeploymentStatusFailed, "auto-repair limit reached: "+reason)
+	}
+
+	now := time.Now().UTC()
+	deployment.RepairAttempts++
+	deployment.Status = domain.DeploymentStatusRecovering
+	deployment.StatusReason = "auto-repair queued: " + reason
+	deployment.FinishedAt = nil
+	deployment.UpdatedAt = now
+	if err := s.deployments.Update(ctx, deployment); err != nil {
+		return err
+	}
+	if err := s.events.Create(ctx, &domain.DeploymentEvent{
+		ID:           idgen.NewUUID(),
+		DeploymentID: deployment.ID,
+		TenantID:     deployment.TenantID,
+		Type:         "auto_repair_queued",
+		Message:      deployment.StatusReason,
+		CreatedAt:    now,
+	}); err != nil {
+		return err
+	}
+	return s.scheduler.ScheduleDeployment(ctx, deployment)
 }
 
 func (s *DeploymentService) CancelDeployment(ctx context.Context, actor domain.Actor, deploymentID string) (*domain.Deployment, error) {
@@ -185,6 +220,9 @@ func (s *DeploymentService) MarkDeploymentStatus(ctx context.Context, deployment
 	deployment.UpdatedAt = now
 	if status == domain.DeploymentStatusProvisioning && deployment.StartedAt == nil {
 		deployment.StartedAt = &now
+	}
+	if status == domain.DeploymentStatusRunning {
+		deployment.RepairAttempts = 0
 	}
 	if status == domain.DeploymentStatusRunning || status == domain.DeploymentStatusFailed || status == domain.DeploymentStatusCancelled || status == domain.DeploymentStatusDeleted {
 		deployment.FinishedAt = &now

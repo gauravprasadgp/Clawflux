@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"time"
 
 	httpapi "github.com/gauravprasad/clawcontrol/internal/api/http"
 	"github.com/gauravprasad/clawcontrol/internal/auth/providers/medium"
@@ -13,6 +14,7 @@ import (
 	"github.com/gauravprasad/clawcontrol/internal/domain"
 	"github.com/gauravprasad/clawcontrol/internal/observability"
 	"github.com/gauravprasad/clawcontrol/internal/platform/database"
+	memoryqueue "github.com/gauravprasad/clawcontrol/internal/queue/memory"
 	"github.com/gauravprasad/clawcontrol/internal/queue/redis"
 	"github.com/gauravprasad/clawcontrol/internal/repositories/memory"
 	pgrepo "github.com/gauravprasad/clawcontrol/internal/repositories/postgres"
@@ -22,28 +24,29 @@ import (
 )
 
 type Runtime struct {
-	Config            Config
-	Logger            *slog.Logger
-	DB                *sql.DB
-	AuthService       *services.AuthService
-	APIKeyService     *services.APIKeyService
-	AdminService      *services.AdminService
-	AuditService      *services.AuditService
-	HealthService     *services.HealthService
-	AppService        *services.AppService
-	DeploymentService *services.DeploymentService
-	Scheduler         domain.Scheduler
-	Backend           domain.DeploymentBackend
-	Queue             domain.JobQueue
-	UserRepo          domain.UserRepository
-	AuthIdentityRepo  domain.AuthIdentityRepository
-	APIKeyRepo        domain.APIKeyRepository
-	AdminRepo         domain.AdminRepository
-	AuditRepo         domain.AuditRepository
-	TenantRepo        domain.TenantRepository
-	AppRepo           domain.AppRepository
-	DeploymentRepo    domain.DeploymentRepository
-	EventRepo         domain.EventRepository
+	Config             Config
+	Logger             *slog.Logger
+	DB                 *sql.DB
+	AuthService        *services.AuthService
+	APIKeyService      *services.APIKeyService
+	AdminService       *services.AdminService
+	AuditService       *services.AuditService
+	HealthService      *services.HealthService
+	AppService         *services.AppService
+	DeploymentService  *services.DeploymentService
+	ReliabilityService *services.ReliabilityService
+	Scheduler          domain.Scheduler
+	Backend            domain.DeploymentBackend
+	Queue              domain.JobQueue
+	UserRepo           domain.UserRepository
+	AuthIdentityRepo   domain.AuthIdentityRepository
+	APIKeyRepo         domain.APIKeyRepository
+	AdminRepo          domain.AdminRepository
+	AuditRepo          domain.AuditRepository
+	TenantRepo         domain.TenantRepository
+	AppRepo            domain.AppRepository
+	DeploymentRepo     domain.DeploymentRepository
+	EventRepo          domain.EventRepository
 }
 
 func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
@@ -54,9 +57,17 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 		logger.Warn("DEVELOPMENT_AUTH is enabled — all requests are trusted without credentials; do NOT use in production")
 	}
 
-	redisQueue := redis.NewClientWithPassword(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueue)
-	var queue domain.JobQueue = redisQueue
-	var queueHealth domain.HealthChecker = redisQueue
+	var queue domain.JobQueue
+	var queueHealth domain.HealthChecker
+	if cfg.RedisAddr == "memory" {
+		memQueue := memoryqueue.NewClient()
+		queue = memQueue
+		queueHealth = memQueue
+	} else {
+		redisQueue := redis.NewClientWithPassword(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisQueue)
+		queue = redisQueue
+		queueHealth = redisQueue
+	}
 
 	var (
 		db               *sql.DB
@@ -121,6 +132,7 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 	appService := services.NewAppService(appRepo, tenantRepo)
 	scheduler := services.NewSchedulerService(queue)
 	deploymentService := services.NewDeploymentService(appRepo, deploymentRepo, eventRepo, scheduler)
+	reliabilityService := services.NewReliabilityService(queue, deploymentRepo, scheduler)
 	adminService := services.NewAdminService(adminRepo, cfg.RepositoryDriver)
 	auditService := services.NewAuditService(auditRepo)
 	healthService := services.NewHealthService(db, queueHealth)
@@ -131,28 +143,29 @@ func NewRuntime(ctx context.Context, cfg Config) (*Runtime, error) {
 	deploymentService.SetBackend(backend)
 
 	return &Runtime{
-		Config:            cfg,
-		Logger:            logger,
-		DB:                db,
-		AuthService:       authService,
-		APIKeyService:     apiKeyService,
-		AdminService:      adminService,
-		AuditService:      auditService,
-		HealthService:     healthService,
-		AppService:        appService,
-		DeploymentService: deploymentService,
-		Scheduler:         scheduler,
-		Backend:           backend,
-		Queue:             queue,
-		UserRepo:          userRepo,
-		AuthIdentityRepo:  authIdentityRepo,
-		APIKeyRepo:        apiKeyRepo,
-		AdminRepo:         adminRepo,
-		AuditRepo:         auditRepo,
-		TenantRepo:        tenantRepo,
-		AppRepo:           appRepo,
-		DeploymentRepo:    deploymentRepo,
-		EventRepo:         eventRepo,
+		Config:             cfg,
+		Logger:             logger,
+		DB:                 db,
+		AuthService:        authService,
+		APIKeyService:      apiKeyService,
+		AdminService:       adminService,
+		AuditService:       auditService,
+		HealthService:      healthService,
+		AppService:         appService,
+		DeploymentService:  deploymentService,
+		ReliabilityService: reliabilityService,
+		Scheduler:          scheduler,
+		Backend:            backend,
+		Queue:              queue,
+		UserRepo:           userRepo,
+		AuthIdentityRepo:   authIdentityRepo,
+		APIKeyRepo:         apiKeyRepo,
+		AdminRepo:          adminRepo,
+		AuditRepo:          auditRepo,
+		TenantRepo:         tenantRepo,
+		AppRepo:            appRepo,
+		DeploymentRepo:     deploymentRepo,
+		EventRepo:          eventRepo,
 	}, nil
 }
 
@@ -170,6 +183,7 @@ func (r *Runtime) HTTPHandler() http.Handler {
 		r.HealthService,
 		r.AppService,
 		r.DeploymentService,
+		r.ReliabilityService,
 	)
 }
 
@@ -183,6 +197,32 @@ func (r *Runtime) Worker() *workerpkg.Consumer {
 	consumer.Register(domain.JobTypeDeploymentDelete, deploymentDelete.Handle)
 	consumer.Register(domain.JobTypeDeploymentSync, deploymentSync.Handle)
 	return consumer
+}
+
+func (r *Runtime) RunReconciler(ctx context.Context) {
+	interval := r.Config.ReconcileInterval
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			r.ReliabilityService.PromoteDue(ctx)
+			result, err := r.ReliabilityService.ReconcileOnce(ctx, 100)
+			if err != nil {
+				r.Logger.Warn("deployment reconciliation failed", "error", err)
+				continue
+			}
+			if result.Scheduled > 0 {
+				r.Logger.Info("deployment reconciliation scheduled work", "scanned", result.Scanned, "scheduled", result.Scheduled)
+			}
+		}
+	}
 }
 
 func (r *Runtime) Close() error {

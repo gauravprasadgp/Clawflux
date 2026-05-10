@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -198,6 +199,13 @@ func mapDeploymentStatus(deployment *appsv1.Deployment) (domain.DeploymentStatus
 	if deployment.Status.ReadyReplicas >= desired && deployment.Status.UpdatedReplicas >= desired {
 		return domain.DeploymentStatusRunning, "deployment ready"
 	}
+	if deployment.Status.ReadyReplicas > 0 || deployment.Status.AvailableReplicas > 0 {
+		return domain.DeploymentStatusDegraded, fmt.Sprintf(
+			"degraded rollout: ready %d/%d replicas",
+			deployment.Status.ReadyReplicas,
+			desired,
+		)
+	}
 
 	return domain.DeploymentStatusProvisioning, fmt.Sprintf(
 		"ready %d/%d replicas",
@@ -232,6 +240,7 @@ func buildDeployment(name, namespace string, req domain.BackendDeployRequest, la
 	}
 
 	container.Env = appendSortedEnvMap(container.Env, cfg.Env)
+	configureReliabilityProbes(&container, cfg)
 
 	podSpec := v1.PodSpec{
 		Containers: []v1.Container{container},
@@ -482,6 +491,11 @@ func configureOpenClawRuntime(podSpec *v1.PodSpec, req domain.BackendDeployReque
 	}
 
 	container.Env = appendSortedEnvMap(container.Env, cfg.ExtraEnv)
+	if len(req.App.Config.Reliability.FallbackProviders) > 0 {
+		if payload, err := json.Marshal(req.App.Config.Reliability.FallbackProviders); err == nil {
+			container.Env = upsertLiteralEnv(container.Env, "CLAWFLUX_INFERENCE_FALLBACKS", string(payload))
+		}
+	}
 
 	container.VolumeMounts = append(container.VolumeMounts, v1.VolumeMount{
 		Name:      "openclaw-workspace",
@@ -515,6 +529,38 @@ func configureOpenClawRuntime(podSpec *v1.PodSpec, req domain.BackendDeployReque
 			}},
 		})
 	}
+}
+
+func configureReliabilityProbes(container *v1.Container, cfg domain.AppConfig) {
+	path := strings.TrimSpace(cfg.Reliability.HealthCheckPath)
+	if path == "" {
+		return
+	}
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	port := appServicePort(cfg)
+	if port <= 0 {
+		port = 3000
+	}
+	timeout := int32(cfg.Reliability.HealthCheckTimeoutSeconds)
+	if timeout <= 0 {
+		timeout = 3
+	}
+	probe := &v1.Probe{
+		ProbeHandler: v1.ProbeHandler{
+			HTTPGet: &v1.HTTPGetAction{
+				Path: path,
+				Port: intstr.FromInt(port),
+			},
+		},
+		InitialDelaySeconds: 10,
+		TimeoutSeconds:      timeout,
+		PeriodSeconds:       10,
+		FailureThreshold:    3,
+	}
+	container.ReadinessProbe = probe.DeepCopy()
+	container.LivenessProbe = probe.DeepCopy()
 }
 
 func deploymentLabels(app domain.App, deployment domain.Deployment) map[string]string {

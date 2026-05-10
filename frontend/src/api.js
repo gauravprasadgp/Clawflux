@@ -36,6 +36,8 @@ export const api = {
   getSummary: () => request('GET', '/v1/admin/summary'),
   getInstances: () => request('GET', '/v1/admin/instances'),
   getPreflight: () => request('GET', '/v1/admin/preflight'),
+  getReliability: () => request('GET', '/v1/admin/reliability'),
+  getDeadLetters: (limit = 25) => request('GET', `/v1/admin/dead-letters?limit=${limit}`),
   getAuditLogs: (limit = 50) => request('GET', `/v1/admin/audit-logs?limit=${limit}`),
 
   provisionUser: (email, displayName) =>
@@ -43,6 +45,9 @@ export const api = {
 
   deployOpenClaw: (payload) =>
     request('POST', '/v1/admin/openclaw/deploy', payload),
+
+  reconcileDeployments: () => request('POST', '/v1/admin/reconcile'),
+  replayDeadLetter: (id) => request('POST', `/v1/admin/dead-letters/${id}/replay`),
 
   getDeployment: (id) => request('GET', `/v1/deployments/${id}`),
   getDeploymentEvents: (id) => request('GET', `/v1/deployments/${id}/events`),

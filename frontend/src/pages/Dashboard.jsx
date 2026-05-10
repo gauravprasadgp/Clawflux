@@ -1,11 +1,12 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { AlertTriangle, ArrowRight, Boxes, CheckCircle2, RefreshCw, Rocket, ShieldAlert, Users, XCircle } from 'lucide-react'
+import { Activity, AlertTriangle, ArrowRight, Boxes, CheckCircle2, RefreshCw, Rocket, RotateCcw, ShieldAlert, Users, XCircle } from 'lucide-react'
 import { api } from '../api'
 import StatusBadge from '../components/StatusBadge'
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
 
   const summary = useQuery({
     queryKey: ['summary'],
@@ -25,9 +26,39 @@ export default function Dashboard() {
     refetchInterval: 20000,
   })
 
+  const reliability = useQuery({
+    queryKey: ['reliability'],
+    queryFn: api.getReliability,
+    refetchInterval: 10000,
+  })
+
+  const deadLetters = useQuery({
+    queryKey: ['deadLetters'],
+    queryFn: () => api.getDeadLetters(25),
+    refetchInterval: 15000,
+  })
+
+  const reconcile = useMutation({
+    mutationFn: api.reconcileDeployments,
+    onSuccess: () => {
+      qc.invalidateQueries(['reliability'])
+      qc.invalidateQueries(['instances'])
+    },
+  })
+
+  const replayDeadLetter = useMutation({
+    mutationFn: api.replayDeadLetter,
+    onSuccess: () => {
+      qc.invalidateQueries(['deadLetters'])
+      qc.invalidateQueries(['reliability'])
+    },
+  })
+
   const stats = summary.data || {}
   const items = instances.data?.items || []
   const checks = preflight.data?.checks || []
+  const queue = reliability.data?.queue || {}
+  const deadLetterItems = deadLetters.data?.items || []
 
   return (
     <div className="page">
@@ -109,13 +140,17 @@ export default function Dashboard() {
             <div className="card">
               <div className="card-body">
                 <div className="section-title">Attention lane</div>
-                <div className="section-copy">Failed deployments are kept visible so operators can retry, cancel, or delete them quickly.</div>
+                <div className="section-copy">Failed deployments and dead-lettered jobs stay visible for operator recovery.</div>
                 <div className="stat-value stat-value-danger" style={{ marginTop: '1rem' }}>
                   {stats.failed_deployments ?? '—'}
                 </div>
                 <div className="stat-footnote">deployments currently marked failed</div>
+                <div className="runtime-strip" style={{ marginTop: '1rem' }}>
+                  <span>{queue.processing ?? '—'} processing</span>
+                  <span>{queue.dead_letters ?? '—'} dead letters</span>
+                </div>
                 <div className="actions-row" style={{ marginTop: '1rem' }}>
-                  <button className="btn-ghost" onClick={() => { summary.refetch(); instances.refetch(); preflight.refetch() }}>
+                  <button className="btn-ghost" onClick={() => { summary.refetch(); instances.refetch(); preflight.refetch(); reliability.refetch(); deadLetters.refetch() }}>
                     <RefreshCw size={14} />
                     Refresh now
                   </button>
@@ -143,6 +178,73 @@ export default function Dashboard() {
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="card" style={{ marginBottom: '1rem' }}>
+          <div className="table-toolbar">
+            <div>
+              <div className="section-title">Reliability control plane</div>
+              <div className="toolbar-copy">Track queue pressure, recover exhausted jobs, and trigger reconciliation across active deployments.</div>
+            </div>
+            <button className="btn-ghost" onClick={() => reconcile.mutate()} disabled={reconcile.isPending}>
+              <Activity size={14} />
+              {reconcile.isPending ? 'Reconciling...' : 'Reconcile now'}
+            </button>
+          </div>
+
+          <div className="grid-4 card-body" style={{ paddingTop: 0 }}>
+            {[
+              { label: 'Ready', value: queue.ready ?? '—', note: 'jobs waiting' },
+              { label: 'Processing', value: queue.processing ?? '—', note: 'leased by workers' },
+              { label: 'Delayed', value: queue.delayed ?? '—', note: 'scheduled retries' },
+              { label: 'Dead letters', value: queue.dead_letters ?? '—', note: 'exhausted jobs', danger: true },
+            ].map(item => (
+              <div key={item.label} className="mini-stat mini-stat-box">
+                <strong className={item.danger && Number(item.value) > 0 ? 'stat-value-danger' : ''}>{item.value}</strong>
+                <span>{item.label} · {item.note}</span>
+              </div>
+            ))}
+          </div>
+
+          {reconcile.error ? <div className="error-box" style={{ margin: '0 1rem 1rem' }}>{reconcile.error.message}</div> : null}
+          {deadLetters.error ? <div className="error-box" style={{ margin: '0 1rem 1rem' }}>{deadLetters.error.message}</div> : null}
+
+          {deadLetterItems.length === 0 ? (
+            <div className="empty-state">No dead-letter jobs.</div>
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Job</th>
+                    <th>Deployment</th>
+                    <th>Reason</th>
+                    <th>Failed</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {deadLetterItems.map(item => (
+                    <tr key={item.id}>
+                      <td>
+                        <div className="mono">{item.job?.type}</div>
+                        <div className="mono">{item.job?.id}</div>
+                      </td>
+                      <td className="mono">{item.job?.deployment_id || '—'}</td>
+                      <td>{item.reason}</td>
+                      <td className="mono">{item.failed_at ? new Date(item.failed_at).toLocaleString() : '—'}</td>
+                      <td>
+                        <button className="btn-ghost" onClick={() => replayDeadLetter.mutate(item.id)} disabled={replayDeadLetter.isPending}>
+                          <RotateCcw size={14} />
+                          Replay
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         <div className="card">

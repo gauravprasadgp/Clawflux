@@ -18,6 +18,7 @@ type Config struct {
 	MediumClientID     string
 	DevelopmentAuth    bool
 	AllowedIngressHost string
+	ReconcileInterval  time.Duration
 	DBMaxOpenConns     int
 	DBMaxIdleConns     int
 	DBConnMaxLifetime  time.Duration
@@ -39,6 +40,7 @@ func LoadConfig() Config {
 		MediumClientID:     env("MEDIUM_CLIENT_ID", ""),
 		DevelopmentAuth:    envBool("DEVELOPMENT_AUTH", false),
 		AllowedIngressHost: env("DEFAULT_INGRESS_HOST", "apps.localhost"),
+		ReconcileInterval:  envDuration("RECONCILE_INTERVAL", 30*time.Second),
 		DBMaxOpenConns:     envInt("DB_MAX_OPEN_CONNS", 20),
 		DBMaxIdleConns:     envInt("DB_MAX_IDLE_CONNS", 10),
 		DBConnMaxLifetime:  envDuration("DB_CONN_MAX_LIFETIME", 30*time.Minute),

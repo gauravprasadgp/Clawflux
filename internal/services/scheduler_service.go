@@ -41,7 +41,7 @@ func (s *SchedulerService) ScheduleDelete(ctx context.Context, deployment *domai
 }
 
 func (s *SchedulerService) ScheduleSync(ctx context.Context, deployment *domain.Deployment) error {
-	return s.queue.Enqueue(ctx, domain.Job{
+	job := domain.Job{
 		ID:           idgen.NewUUID(),
 		Type:         domain.JobTypeDeploymentSync,
 		TenantID:     deployment.TenantID,
@@ -49,5 +49,9 @@ func (s *SchedulerService) ScheduleSync(ctx context.Context, deployment *domain.
 		DeploymentID: deployment.ID,
 		Attempts:     0,
 		CreatedAt:    time.Now().UTC(),
-	})
+	}
+	if delayed, ok := s.queue.(domain.JobScheduler); ok {
+		return delayed.EnqueueAfter(ctx, job, 2*time.Second)
+	}
+	return s.queue.Enqueue(ctx, job)
 }

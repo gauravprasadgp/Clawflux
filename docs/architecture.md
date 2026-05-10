@@ -83,19 +83,16 @@ Kubernetes-only backend scaffold for a multi-tenant OpenClaw control plane.
 
 - Repository abstraction with PostgreSQL and in-memory implementations.
 - Explicit scheduler boundary between deployment service and queue transport.
+- Redis queue uses processing leases, delayed retry scheduling, stale lease reclaim, and dead letters.
 - Deployment event history in addition to deployment status.
+- Continuous worker-side reconciliation requeues deployment create/delete/sync work from durable desired state.
 - Admin summary and audit log endpoints.
+- Reliability admin endpoints expose queue stats, dead-letter replay, and manual reconciliation.
 - Readiness checks for database and Redis.
 - OAuth provider plumbing plus API key authentication.
 
 ## Missing Bits For A Production-Grade Control Plane
 
-- Real Kubernetes reconciliation:
-  replace the current lightweight backend stub with `client-go`-backed apply, delete, and status reconciliation.
-- Delayed retries and dead-letter handling:
-  the Redis queue currently provides basic enqueue and blocking dequeue only.
-- Continuous sync loop:
-  reconcile actual backend state back into deployment status even when no new API request arrives.
 - Secret management:
   support app secrets separately from plain app config and avoid treating all env as regular config.
 - Runtime log and event streaming:
@@ -114,11 +111,13 @@ Kubernetes-only backend scaffold for a multi-tenant OpenClaw control plane.
 - Platform admin endpoints currently use `X-Platform-Admin: true` as a temporary operator guardrail.
 - Backend implementation is intentionally K8s-only.
 - Deployment scheduling is a first-class service boundary between API and queue.
+- Deployment reliability is policy-driven through `AppConfig.Reliability`.
+- Failed backend sync can move a deployment into `recovering` and queue auto-repair until its repair limit is reached.
 
 ## Recommended Next Additions
 
-1. Replace the Kubernetes backend stub with a real reconciler and persist backend refs plus readiness details.
-2. Add retry scheduling, attempt tracking, and dead-letter behavior to the queue/worker path.
-3. Introduce deployment sync jobs so status can recover from worker restarts and backend drift.
-4. Add secrets and logs as dedicated service boundaries instead of folding them into app config.
-5. Build a frontend or operator console on top of the existing admin, audit, app, and deployment APIs.
+1. Add runtime log and Kubernetes event streaming for failed/degraded deployments.
+2. Add alert routing for dead letters, degraded deployments, and auto-repair limit exhaustion.
+3. Add backup/restore workflows for Postgres and OpenClaw workspace PVCs.
+4. Add secrets as a dedicated service boundary instead of folding them into app config.
+5. Add provider proxying for enforced fallback inference and central provider outage metrics.

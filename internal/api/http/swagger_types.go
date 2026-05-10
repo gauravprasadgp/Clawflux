@@ -54,6 +54,10 @@ type AdminBackendListResponse struct {
 	Items []domain.BackendCapabilities `json:"items"`
 }
 
+type DeadLetterListResponse struct {
+	Items []domain.DeadLetterJob `json:"items"`
+}
+
 type AdminPreflightCheck struct {
 	ID       string `json:"id"`
 	Label    string `json:"label"`

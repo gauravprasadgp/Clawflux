@@ -537,6 +537,135 @@ func (r *Router) handleAdminBackends(w http.ResponseWriter, req *http.Request) {
 	}})
 }
 
+// handleAdminReliability godoc
+// @Summary Get reliability queue status
+// @Tags Admin
+// @Produce json
+// @Param X-User-Email header string true "Admin email"
+// @Param X-Platform-Admin header string true "Set to true"
+// @Success 200 {object} services.ReliabilityStatus
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Router /v1/admin/reliability [get]
+func (r *Router) handleAdminReliability(w http.ResponseWriter, req *http.Request) {
+	actor, err := actorFromContext(req.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	status, err := r.reliability.Status(req.Context(), actor)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+// handleAdminReconcile godoc
+// @Summary Queue reconciliation work for active deployments
+// @Tags Admin
+// @Produce json
+// @Param X-User-Email header string true "Admin email"
+// @Param X-Platform-Admin header string true "Set to true"
+// @Success 200 {object} services.ReconcileResult
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Router /v1/admin/reconcile [post]
+func (r *Router) handleAdminReconcile(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	actor, err := actorFromContext(req.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	limit := 100
+	if raw := req.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= 500 {
+			limit = parsed
+		}
+	}
+	result, err := r.reliability.ReconcileActive(req.Context(), actor, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+// handleAdminDeadLetters godoc
+// @Summary List dead-letter jobs
+// @Tags Admin
+// @Produce json
+// @Param X-User-Email header string true "Admin email"
+// @Param X-Platform-Admin header string true "Set to true"
+// @Success 200 {object} DeadLetterListResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Router /v1/admin/dead-letters [get]
+func (r *Router) handleAdminDeadLetters(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	actor, err := actorFromContext(req.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	limit := 50
+	if raw := req.URL.Query().Get("limit"); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= 200 {
+			limit = parsed
+		}
+	}
+	items, err := r.reliability.ListDeadLetters(req.Context(), actor, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (r *Router) handleAdminDeadLetterRoutes(w http.ResponseWriter, req *http.Request) {
+	path := strings.TrimPrefix(req.URL.Path, "/v1/admin/dead-letters/")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 2 && parts[1] == "replay" && req.Method == http.MethodPost {
+		r.replayDeadLetter(w, req, parts[0])
+		return
+	}
+	http.NotFound(w, req)
+}
+
+// replayDeadLetter godoc
+// @Summary Replay a dead-letter job
+// @Tags Admin
+// @Produce json
+// @Param deadLetterID path string true "Dead-letter ID"
+// @Param X-User-Email header string true "Admin email"
+// @Param X-Platform-Admin header string true "Set to true"
+// @Success 200 {object} domain.Job
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /v1/admin/dead-letters/{deadLetterID}/replay [post]
+func (r *Router) replayDeadLetter(w http.ResponseWriter, req *http.Request, id string) {
+	actor, err := actorFromContext(req.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	job, err := r.reliability.ReplayDeadLetter(req.Context(), actor, id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	_ = r.audit.Record(req.Context(), actor, "dead_letter.replay", "job", job.ID, "dead-letter job replayed")
+	writeJSON(w, http.StatusOK, job)
+}
+
 // handleAdminPreflight godoc
 // @Summary Inspect runtime readiness and setup guidance
 // @Tags Admin

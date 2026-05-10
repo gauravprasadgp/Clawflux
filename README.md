@@ -12,7 +12,7 @@ Most control planes are either too big (full PaaS, weeks to understand) or too s
 
 - **Purpose-built for OpenClaw** — not a generic container scheduler. It speaks OpenClaw's language natively: gateway tokens, workspace PVCs, provider API keys, AGENTS.md injection.
 - **Small and hackable** — ~4k lines of Go, clean layer separation, easy to read and extend.
-- **Production-ready architecture** — async workers, retries, deployment event history, audit logs, tenant isolation.
+- **Production-ready architecture** — leased async jobs, delayed retries, dead letters, reconciliation, deployment event history, audit logs, tenant isolation.
 - **One command to run everything** — `make dev` starts the API, worker, and React UI together.
 
 ---
@@ -36,11 +36,41 @@ You → Admin UI → POST /v1/admin/openclaw/deploy
 
 Every deployment is tracked with status, events, and audit logs. Retry, cancel, or delete from the UI or API.
 
+### Reliability layer
+
+Clawflux now treats deployment reliability as a first-class control-plane loop:
+
+- Workers lease jobs into a processing queue and acknowledge them only after successful handling.
+- Failed jobs retry with delayed backoff instead of blocking worker capacity.
+- Stale processing leases are reclaimed after worker crashes.
+- Exhausted jobs move to a dead-letter queue with replay support.
+- A reconciler periodically compares durable deployment state with queued work and re-schedules create, sync, or delete jobs for active deployments.
+- Deployments can move through `degraded` and `recovering`, with per-app auto-repair limits.
+- OpenClaw deployments can receive HTTP health probes and fallback inference provider config through `config.reliability`.
+
+Operator endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /v1/admin/reliability` | Queue depth, processing, delayed, and dead-letter counts |
+| `POST /v1/admin/reconcile` | Manually enqueue reconciliation work for active deployments |
+| `GET /v1/admin/dead-letters` | Inspect jobs that exhausted retries |
+| `POST /v1/admin/dead-letters/{id}/replay` | Move a dead-letter job back to the ready queue |
+
+Useful runtime knobs:
+
+| Env var | Default | Purpose |
+|---|---:|---|
+| `REDIS_ADDR` | `127.0.0.1:6379` | Redis address. Use `memory` for local demos without Redis; API starts an embedded worker in this mode. |
+| `JOB_MAX_ATTEMPTS` | `5` | Attempts before a job is dead-lettered |
+| `JOB_RETRY_BACKOFF` | `2s` | Base exponential retry delay |
+| `RECONCILE_INTERVAL` | `30s` | Worker-side active deployment reconciliation interval |
+
 ---
 
 ## Quick Start
 
-**Prerequisites:** Go 1.22+, Docker, Node 18+
+**Prerequisites:** Go 1.22+, Docker, Node 20.19+ or 22.12+
 
 ```bash
 git clone https://github.com/gauravprasadgp/clawflux.git
@@ -237,8 +267,12 @@ Want to add a backend? It's just one interface — see `internal/backends/kubern
 
 - ✅ Multi-tenant app and deployment management
 - ✅ Async worker pipeline with retries and sync jobs
+- ✅ Leased Redis jobs with delayed retries, stale lease reclaim, dead letters, and replay
+- ✅ Continuous reconciliation loop for queued, running, degraded, recovering, and deleting deployments
+- ✅ Auto-repair policies with repair limits and recovering/degraded deployment states
 - ✅ Kubernetes backend — full reconciliation (Deployment, Service, Ingress, PVC, ConfigMap, Secret)
 - ✅ Namespace-per-tenant isolation with network policies
+- ✅ Optional agent HTTP probes and fallback inference provider config injection
 - ✅ OpenClaw-native config: gateway token, workspace PVC, provider API keys, AGENTS.md injection
 - ✅ API key auth with prefix/hash storage
 - ✅ Admin REST API + React control plane UI
@@ -253,7 +287,7 @@ Want to add a backend? It's just one interface — see `internal/backends/kubern
 
 ### Near-term
 - [ ] **Real-time deployment logs** — stream pod logs through the API and into the UI
-- [ ] **Dead-letter queue** — surface permanently failed jobs with alerting
+- [ ] **Alert routing** — notify operators when dead letters or auto-repair limits are hit
 - [ ] **Webhook notifications** — POST deployment status events to external systems
 - [ ] **Docker Compose backend** — for single-machine or homelab deployments
 - [ ] **Richer RBAC** — per-tenant roles, scoped API keys
@@ -286,7 +320,7 @@ Clawflux is early-stage and contributions are genuinely welcome. The codebase is
 | **Docker Compose backend** | Implement `domain.DeploymentBackend` using `docker compose` |
 | **Deployment log streaming** | Add `GET /v1/deployments/{id}/logs` that tails pod logs via K8s API |
 | **Frontend polish** | Improve the React UI — dark mode polish, mobile layout, loading states |
-| **Dead-letter queue** | Surface jobs that exceeded max attempts with a `GET /v1/admin/dead-letters` endpoint |
+| **Alert routing** | Send dead-letter and repair-limit events to Slack, email, or webhooks |
 | **Webhook notifications** | `POST /v1/apps/{id}/webhooks` + fan-out on deployment status change |
 | **Docs** | Architecture deep-dives, deployment guides, backend implementation walkthrough |
 

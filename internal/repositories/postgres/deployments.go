@@ -26,9 +26,9 @@ func (r *DeploymentRepo) Create(ctx context.Context, deployment *domain.Deployme
 	_, err = r.db.ExecContext(ctx, `
 insert into deployments (
   id, tenant_id, app_id, version, image_ref, config_snapshot, status, status_reason, backend, backend_ref,
-  requested_by, started_at, finished_at, created_at, updated_at
-) values ($1, $2, $3, $4, $5, $6, $7, nullif($8, ''), $9, $10, $11, $12, $13, $14, $15)
-`, deployment.ID, deployment.TenantID, deployment.AppID, deployment.Version, deployment.ImageRef, config, deployment.Status, deployment.StatusReason, deployment.Backend, ref, deployment.RequestedBy, nullableTime(deployment.StartedAt), nullableTime(deployment.FinishedAt), deployment.CreatedAt, deployment.UpdatedAt)
+  requested_by, repair_attempts, started_at, finished_at, created_at, updated_at
+) values ($1, $2, $3, $4, $5, $6, $7, nullif($8, ''), $9, $10, $11, $12, $13, $14, $15, $16)
+`, deployment.ID, deployment.TenantID, deployment.AppID, deployment.Version, deployment.ImageRef, config, deployment.Status, deployment.StatusReason, deployment.Backend, ref, deployment.RequestedBy, deployment.RepairAttempts, nullableTime(deployment.StartedAt), nullableTime(deployment.FinishedAt), deployment.CreatedAt, deployment.UpdatedAt)
 	return wrap("create deployment", mapSQLError(err))
 }
 
@@ -49,11 +49,12 @@ set image_ref = $4,
     status_reason = nullif($7, ''),
     backend = $8,
     backend_ref = $9,
-    started_at = $10,
-    finished_at = $11,
-    updated_at = $12
+    repair_attempts = $10,
+    started_at = $11,
+    finished_at = $12,
+    updated_at = $13
 where id = $1 and tenant_id = $2 and app_id = $3
-`, deployment.ID, deployment.TenantID, deployment.AppID, deployment.ImageRef, config, deployment.Status, deployment.StatusReason, deployment.Backend, ref, nullableTime(deployment.StartedAt), nullableTime(deployment.FinishedAt), deployment.UpdatedAt)
+`, deployment.ID, deployment.TenantID, deployment.AppID, deployment.ImageRef, config, deployment.Status, deployment.StatusReason, deployment.Backend, ref, deployment.RepairAttempts, nullableTime(deployment.StartedAt), nullableTime(deployment.FinishedAt), deployment.UpdatedAt)
 	return wrap("update deployment", mapSQLError(err))
 }
 
@@ -63,7 +64,7 @@ func (r *DeploymentRepo) GetByID(ctx context.Context, tenantID, deploymentID str
 	var rawRef []byte
 	err := queryRowContext(ctx, r.db, `
 select id, tenant_id, app_id, version, image_ref, config_snapshot, status, coalesce(status_reason, ''), backend, backend_ref,
-       requested_by, started_at, finished_at, created_at, updated_at
+       requested_by, repair_attempts, started_at, finished_at, created_at, updated_at
 from deployments
 where tenant_id = $1 and id = $2
 `, tenantID, deploymentID).Scan(
@@ -78,6 +79,7 @@ where tenant_id = $1 and id = $2
 		&deployment.Backend,
 		&rawRef,
 		&deployment.RequestedBy,
+		&deployment.RepairAttempts,
 		&deployment.StartedAt,
 		&deployment.FinishedAt,
 		&deployment.CreatedAt,
@@ -98,7 +100,7 @@ where tenant_id = $1 and id = $2
 func (r *DeploymentRepo) ListByApp(ctx context.Context, tenantID, appID string) ([]domain.Deployment, error) {
 	rows, err := r.db.QueryContext(ctx, `
 select id, tenant_id, app_id, version, image_ref, config_snapshot, status, coalesce(status_reason, ''), backend, backend_ref,
-       requested_by, started_at, finished_at, created_at, updated_at
+       requested_by, repair_attempts, started_at, finished_at, created_at, updated_at
 from deployments
 where tenant_id = $1 and app_id = $2
 order by version asc
@@ -113,7 +115,7 @@ order by version asc
 		var d domain.Deployment
 		var rawConfig []byte
 		var rawRef []byte
-		if err := rows.Scan(&d.ID, &d.TenantID, &d.AppID, &d.Version, &d.ImageRef, &rawConfig, &d.Status, &d.StatusReason, &d.Backend, &rawRef, &d.RequestedBy, &d.StartedAt, &d.FinishedAt, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.TenantID, &d.AppID, &d.Version, &d.ImageRef, &rawConfig, &d.Status, &d.StatusReason, &d.Backend, &rawRef, &d.RequestedBy, &d.RepairAttempts, &d.StartedAt, &d.FinishedAt, &d.CreatedAt, &d.UpdatedAt); err != nil {
 			return nil, wrap("scan deployment", err)
 		}
 		if err := fromJSON(rawConfig, &d.ConfigSnapshot); err != nil {
@@ -125,6 +127,42 @@ order by version asc
 		items = append(items, d)
 	}
 	return items, wrap("list deployment rows", rows.Err())
+}
+
+func (r *DeploymentRepo) ListActive(ctx context.Context, limit int) ([]domain.Deployment, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.db.QueryContext(ctx, `
+select id, tenant_id, app_id, version, image_ref, config_snapshot, status, coalesce(status_reason, ''), backend, backend_ref,
+       requested_by, repair_attempts, started_at, finished_at, created_at, updated_at
+from deployments
+where status in ('queued', 'provisioning', 'running', 'degraded', 'recovering', 'deleting')
+order by updated_at asc
+limit $1
+`, limit)
+	if err != nil {
+		return nil, wrap("list active deployments", err)
+	}
+	defer rows.Close()
+
+	var items []domain.Deployment
+	for rows.Next() {
+		var d domain.Deployment
+		var rawConfig []byte
+		var rawRef []byte
+		if err := rows.Scan(&d.ID, &d.TenantID, &d.AppID, &d.Version, &d.ImageRef, &rawConfig, &d.Status, &d.StatusReason, &d.Backend, &rawRef, &d.RequestedBy, &d.RepairAttempts, &d.StartedAt, &d.FinishedAt, &d.CreatedAt, &d.UpdatedAt); err != nil {
+			return nil, wrap("scan active deployment", err)
+		}
+		if err := fromJSON(rawConfig, &d.ConfigSnapshot); err != nil {
+			return nil, wrap("decode active deployment config", err)
+		}
+		if err := fromJSON(rawRef, &d.BackendRef); err != nil {
+			return nil, wrap("decode active deployment ref", err)
+		}
+		items = append(items, d)
+	}
+	return items, wrap("list active deployment rows", rows.Err())
 }
 
 func (r *DeploymentRepo) NextVersion(ctx context.Context, tenantID, appID string) (int, error) {

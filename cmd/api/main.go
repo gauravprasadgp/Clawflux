@@ -65,6 +65,16 @@ func main() {
 		}
 	}()
 
+	if cfg.RedisAddr == "memory" {
+		runtime.Logger.Warn("REDIS_ADDR=memory is enabled; running embedded worker and reconciler in the API process")
+		go func() {
+			if err := runtime.Worker().Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+				runtime.Logger.Error("embedded worker exited with error", "error", err)
+			}
+		}()
+		go runtime.RunReconciler(ctx)
+	}
+
 	<-ctx.Done()
 	runtime.Logger.Info("shutdown signal received, draining connections")
 

@@ -143,6 +143,13 @@ func NewClientWithPassword(addr, password, queue string) *Client {
 }
 
 func (c *Client) Enqueue(ctx context.Context, job domain.Job) error {
+	job.LeasedAt = time.Time{}
+	if job.CreatedAt.IsZero() {
+		job.CreatedAt = time.Now().UTC()
+	}
+	if job.AvailableAt.IsZero() {
+		job.AvailableAt = time.Now().UTC()
+	}
 	payload, err := json.Marshal(job)
 	if err != nil {
 		return fmt.Errorf("marshal job: %w", err)
@@ -181,60 +188,261 @@ func (c *Client) Dequeue(ctx context.Context) (domain.Job, error) {
 	// BRPOP blocks for up to 5 seconds; give it a 6-second deadline.
 	_ = rc.SetDeadline(time.Now().Add(6 * time.Second))
 
-	if _, err := rc.Write([]byte(buildArray("BRPOP", c.queue, "5"))); err != nil {
+	if _, err := rc.Write([]byte(buildArray("BRPOPLPUSH", c.queue, c.processingQueue(), "5"))); err != nil {
 		c.pool.discard(rc)
-		return domain.Job{}, fmt.Errorf("redis BRPOP write: %w", err)
+		return domain.Job{}, fmt.Errorf("redis BRPOPLPUSH write: %w", err)
 	}
 
-	line, err := readLine(rc.reader)
+	payload, err := readBulkString(rc.reader)
 	if err != nil {
+		if errors.Is(err, errNilBulkString) {
+			_ = rc.SetDeadline(time.Time{})
+			c.pool.put(rc)
+			return domain.Job{}, context.DeadlineExceeded
+		}
+		// Timeout from BRPOPLPUSH — treat as "nothing to do" rather than fatal.
 		c.pool.discard(rc)
-		// Timeout from BRPOP — treat as "nothing to do" rather than fatal.
 		var netErr net.Error
 		if errors.As(err, &netErr) && netErr.Timeout() {
 			return domain.Job{}, context.DeadlineExceeded
 		}
-		return domain.Job{}, fmt.Errorf("redis BRPOP read: %w", err)
+		return domain.Job{}, fmt.Errorf("redis BRPOPLPUSH read: %w", err)
 	}
 
-	if line == "$-1" || line == "*-1" {
+	var job domain.Job
+	if err := json.Unmarshal([]byte(payload), &job); err != nil {
+		_ = rc.SetDeadline(time.Time{})
 		c.pool.put(rc)
-		return domain.Job{}, context.DeadlineExceeded
+		return domain.Job{}, fmt.Errorf("unmarshal job: %w", err)
 	}
-	if !strings.HasPrefix(line, "*") {
-		c.pool.discard(rc)
-		return domain.Job{}, fmt.Errorf("unexpected redis response: %s", line)
-	}
+	job.LeasedAt = time.Now().UTC()
 
-	items, err := strconv.Atoi(strings.TrimPrefix(line, "*"))
+	leasedPayload, err := json.Marshal(job)
 	if err != nil {
 		c.pool.discard(rc)
-		return domain.Job{}, fmt.Errorf("parse array length: %w", err)
+		return domain.Job{}, fmt.Errorf("marshal leased job: %w", err)
 	}
-	if items != 2 {
-		c.pool.discard(rc)
-		return domain.Job{}, fmt.Errorf("unexpected BRPOP payload size: %d", items)
-	}
-
-	// First bulk string is the queue name — discard it.
-	if _, err := readBulkString(rc.reader); err != nil {
-		c.pool.discard(rc)
-		return domain.Job{}, err
-	}
-	payload, err := readBulkString(rc.reader)
-	if err != nil {
-		c.pool.discard(rc)
-		return domain.Job{}, err
+	if string(leasedPayload) != payload {
+		if err := writeExpectInteger(rc, "LPUSH", c.processingQueue(), string(leasedPayload)); err != nil {
+			c.pool.discard(rc)
+			return domain.Job{}, fmt.Errorf("redis LPUSH leased job: %w", err)
+		}
+		if err := writeExpectInteger(rc, "LREM", c.processingQueue(), "1", payload); err != nil {
+			c.pool.discard(rc)
+			return domain.Job{}, fmt.Errorf("redis LREM original leased job: %w", err)
+		}
 	}
 
 	_ = rc.SetDeadline(time.Time{})
 	c.pool.put(rc)
-
-	var job domain.Job
-	if err := json.Unmarshal([]byte(payload), &job); err != nil {
-		return domain.Job{}, fmt.Errorf("unmarshal job: %w", err)
-	}
 	return job, nil
+}
+
+func (c *Client) Ack(ctx context.Context, job domain.Job) error {
+	payload, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("marshal ack job: %w", err)
+	}
+	return c.withIntegerCommand(ctx, "LREM", c.processingQueue(), "1", string(payload))
+}
+
+func (c *Client) EnqueueAfter(ctx context.Context, job domain.Job, delay time.Duration) error {
+	job.LeasedAt = time.Time{}
+	if job.CreatedAt.IsZero() {
+		job.CreatedAt = time.Now().UTC()
+	}
+	job.AvailableAt = time.Now().UTC().Add(delay)
+	payload, err := json.Marshal(job)
+	if err != nil {
+		return fmt.Errorf("marshal delayed job: %w", err)
+	}
+	score := strconv.FormatInt(job.AvailableAt.UnixMilli(), 10)
+	return c.withIntegerCommand(ctx, "ZADD", c.delayedQueue(), score, string(payload))
+}
+
+func (c *Client) PromoteDue(ctx context.Context, limit int) (int, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rc, err := c.pool.get(ctx)
+	if err != nil {
+		return 0, err
+	}
+	_ = rc.SetDeadline(time.Now().Add(c.timeout))
+	defer func() { _ = rc.SetDeadline(time.Time{}) }()
+
+	now := strconv.FormatInt(time.Now().UTC().UnixMilli(), 10)
+	if _, err := rc.Write([]byte(buildArray("ZRANGEBYSCORE", c.delayedQueue(), "-inf", now, "LIMIT", "0", strconv.Itoa(limit)))); err != nil {
+		c.pool.discard(rc)
+		return 0, fmt.Errorf("redis ZRANGEBYSCORE write: %w", err)
+	}
+	payloads, err := readBulkStringArray(rc.reader)
+	if err != nil {
+		c.pool.discard(rc)
+		return 0, fmt.Errorf("redis ZRANGEBYSCORE read: %w", err)
+	}
+
+	promoted := 0
+	for _, payload := range payloads {
+		removed, err := writeIntegerReply(rc, "ZREM", c.delayedQueue(), payload)
+		if err != nil {
+			c.pool.discard(rc)
+			return promoted, fmt.Errorf("redis ZREM delayed job: %w", err)
+		}
+		if removed == 0 {
+			continue
+		}
+		if err := writeExpectInteger(rc, "RPUSH", c.queue, payload); err != nil {
+			c.pool.discard(rc)
+			return promoted, fmt.Errorf("redis RPUSH promoted job: %w", err)
+		}
+		promoted++
+	}
+	c.pool.put(rc)
+	return promoted, nil
+}
+
+func (c *Client) ReclaimStale(ctx context.Context, staleAfter time.Duration, limit int) (int, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if staleAfter <= 0 {
+		staleAfter = 2 * time.Minute
+	}
+	rc, err := c.pool.get(ctx)
+	if err != nil {
+		return 0, err
+	}
+	_ = rc.SetDeadline(time.Now().Add(c.timeout))
+	defer func() { _ = rc.SetDeadline(time.Time{}) }()
+
+	if _, err := rc.Write([]byte(buildArray("LRANGE", c.processingQueue(), "0", strconv.Itoa(limit-1)))); err != nil {
+		c.pool.discard(rc)
+		return 0, fmt.Errorf("redis LRANGE processing write: %w", err)
+	}
+	payloads, err := readBulkStringArray(rc.reader)
+	if err != nil {
+		c.pool.discard(rc)
+		return 0, fmt.Errorf("redis LRANGE processing read: %w", err)
+	}
+
+	cutoff := time.Now().UTC().Add(-staleAfter)
+	reclaimed := 0
+	for _, payload := range payloads {
+		var job domain.Job
+		if err := json.Unmarshal([]byte(payload), &job); err != nil {
+			continue
+		}
+		if !job.LeasedAt.IsZero() && job.LeasedAt.After(cutoff) {
+			continue
+		}
+		removed, err := writeIntegerReply(rc, "LREM", c.processingQueue(), "1", payload)
+		if err != nil {
+			c.pool.discard(rc)
+			return reclaimed, fmt.Errorf("redis LREM stale job: %w", err)
+		}
+		if removed == 0 {
+			continue
+		}
+		job.LeasedAt = time.Time{}
+		job.AvailableAt = time.Now().UTC()
+		requeuedPayload, err := json.Marshal(job)
+		if err != nil {
+			c.pool.discard(rc)
+			return reclaimed, fmt.Errorf("marshal reclaimed job: %w", err)
+		}
+		if err := writeExpectInteger(rc, "RPUSH", c.queue, string(requeuedPayload)); err != nil {
+			c.pool.discard(rc)
+			return reclaimed, fmt.Errorf("redis RPUSH reclaimed job: %w", err)
+		}
+		reclaimed++
+	}
+	c.pool.put(rc)
+	return reclaimed, nil
+}
+
+func (c *Client) DeadLetter(ctx context.Context, item domain.DeadLetterJob) error {
+	if item.FailedAt.IsZero() {
+		item.FailedAt = time.Now().UTC()
+	}
+	payload, err := json.Marshal(item)
+	if err != nil {
+		return fmt.Errorf("marshal dead-letter job: %w", err)
+	}
+	return c.withIntegerCommand(ctx, "LPUSH", c.deadLetterQueue(), string(payload))
+}
+
+func (c *Client) ListDeadLetters(ctx context.Context, limit int) ([]domain.DeadLetterJob, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	payloads, err := c.readList(ctx, c.deadLetterQueue(), 0, limit-1)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]domain.DeadLetterJob, 0, len(payloads))
+	for _, payload := range payloads {
+		var item domain.DeadLetterJob
+		if err := json.Unmarshal([]byte(payload), &item); err != nil {
+			return nil, fmt.Errorf("unmarshal dead-letter job: %w", err)
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func (c *Client) ReplayDeadLetter(ctx context.Context, id string) (*domain.Job, error) {
+	payloads, err := c.readList(ctx, c.deadLetterQueue(), 0, 499)
+	if err != nil {
+		return nil, err
+	}
+	for _, payload := range payloads {
+		var item domain.DeadLetterJob
+		if err := json.Unmarshal([]byte(payload), &item); err != nil {
+			continue
+		}
+		if item.ID != id {
+			continue
+		}
+		if err := c.withIntegerCommand(ctx, "LREM", c.deadLetterQueue(), "1", payload); err != nil {
+			return nil, err
+		}
+		job := item.Job
+		job.Attempts = 0
+		job.LastError = ""
+		job.LeasedAt = time.Time{}
+		job.AvailableAt = time.Now().UTC()
+		if err := c.Enqueue(ctx, job); err != nil {
+			return nil, err
+		}
+		return &job, nil
+	}
+	return nil, domain.ErrNotFound
+}
+
+func (c *Client) Stats(ctx context.Context) (*domain.QueueStats, error) {
+	ready, err := c.integerReply(ctx, "LLEN", c.queue)
+	if err != nil {
+		return nil, err
+	}
+	processing, err := c.integerReply(ctx, "LLEN", c.processingQueue())
+	if err != nil {
+		return nil, err
+	}
+	delayed, err := c.integerReply(ctx, "ZCARD", c.delayedQueue())
+	if err != nil {
+		return nil, err
+	}
+	deadLetters, err := c.integerReply(ctx, "LLEN", c.deadLetterQueue())
+	if err != nil {
+		return nil, err
+	}
+	return &domain.QueueStats{
+		Ready:       ready,
+		Processing:  processing,
+		Delayed:     delayed,
+		DeadLetters: deadLetters,
+	}, nil
 }
 
 func (c *Client) Check(ctx context.Context) error {
@@ -262,7 +470,80 @@ func (c *Client) Check(ctx context.Context) error {
 	return nil
 }
 
+func (c *Client) processingQueue() string {
+	return c.queue + ":processing"
+}
+
+func (c *Client) delayedQueue() string {
+	return c.queue + ":delayed"
+}
+
+func (c *Client) deadLetterQueue() string {
+	return c.queue + ":dead"
+}
+
+func (c *Client) withIntegerCommand(ctx context.Context, args ...string) error {
+	_, err := c.integerReply(ctx, args...)
+	return err
+}
+
+func (c *Client) integerReply(ctx context.Context, args ...string) (int, error) {
+	rc, err := c.pool.get(ctx)
+	if err != nil {
+		return 0, err
+	}
+	_ = rc.SetDeadline(time.Now().Add(c.timeout))
+	defer func() { _ = rc.SetDeadline(time.Time{}) }()
+
+	if _, err := rc.Write([]byte(buildArray(args...))); err != nil {
+		c.pool.discard(rc)
+		return 0, fmt.Errorf("redis %s write: %w", args[0], err)
+	}
+	value, err := readInteger(rc.reader)
+	if err != nil {
+		c.pool.discard(rc)
+		return 0, fmt.Errorf("redis %s read: %w", args[0], err)
+	}
+	c.pool.put(rc)
+	return value, nil
+}
+
+func (c *Client) readList(ctx context.Context, key string, start, stop int) ([]string, error) {
+	rc, err := c.pool.get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	_ = rc.SetDeadline(time.Now().Add(c.timeout))
+	defer func() { _ = rc.SetDeadline(time.Time{}) }()
+
+	if _, err := rc.Write([]byte(buildArray("LRANGE", key, strconv.Itoa(start), strconv.Itoa(stop)))); err != nil {
+		c.pool.discard(rc)
+		return nil, fmt.Errorf("redis LRANGE write: %w", err)
+	}
+	values, err := readBulkStringArray(rc.reader)
+	if err != nil {
+		c.pool.discard(rc)
+		return nil, fmt.Errorf("redis LRANGE read: %w", err)
+	}
+	c.pool.put(rc)
+	return values, nil
+}
+
+func writeExpectInteger(c *conn, args ...string) error {
+	_, err := writeIntegerReply(c, args...)
+	return err
+}
+
+func writeIntegerReply(c *conn, args ...string) (int, error) {
+	if _, err := c.Write([]byte(buildArray(args...))); err != nil {
+		return 0, err
+	}
+	return readInteger(c.reader)
+}
+
 // ── RESP helpers ──────────────────────────────────────────────────────────────
+
+var errNilBulkString = errors.New("nil bulk string")
 
 func buildArray(parts ...string) string {
 	var b strings.Builder
@@ -293,9 +574,56 @@ func readBulkString(reader *bufio.Reader) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("parse bulk string size: %w", err)
 	}
+	if size < 0 {
+		return "", errNilBulkString
+	}
 	buf := make([]byte, size+2) // +2 for trailing \r\n
 	if _, err := io.ReadFull(reader, buf); err != nil {
 		return "", fmt.Errorf("read bulk string body: %w", err)
 	}
 	return string(buf[:size]), nil
+}
+
+func readBulkStringArray(reader *bufio.Reader) ([]string, error) {
+	header, err := readLine(reader)
+	if err != nil {
+		return nil, err
+	}
+	if !strings.HasPrefix(header, "*") {
+		return nil, fmt.Errorf("unexpected array header: %s", header)
+	}
+	count, err := strconv.Atoi(strings.TrimPrefix(header, "*"))
+	if err != nil {
+		return nil, fmt.Errorf("parse array size: %w", err)
+	}
+	if count < 0 {
+		return nil, nil
+	}
+	items := make([]string, 0, count)
+	for i := 0; i < count; i++ {
+		item, err := readBulkString(reader)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func readInteger(reader *bufio.Reader) (int, error) {
+	line, err := readLine(reader)
+	if err != nil {
+		return 0, err
+	}
+	if strings.HasPrefix(line, "-") {
+		return 0, fmt.Errorf("redis error: %s", strings.TrimPrefix(line, "-"))
+	}
+	if !strings.HasPrefix(line, ":") {
+		return 0, fmt.Errorf("unexpected integer response: %s", line)
+	}
+	value, err := strconv.Atoi(strings.TrimPrefix(line, ":"))
+	if err != nil {
+		return 0, fmt.Errorf("parse integer response: %w", err)
+	}
+	return value, nil
 }

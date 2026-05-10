@@ -17,13 +17,14 @@ type Router struct {
 	health      *services.HealthService
 	apps        *services.AppService
 	deployments *services.DeploymentService
+	reliability *services.ReliabilityService
 	devAuth     bool
 	repository  string
 	backend     string
 	ingressHost string
 }
 
-func NewRouter(logger *slog.Logger, devAuth bool, repository string, backend string, ingressHost string, auth *services.AuthService, apiKeys *services.APIKeyService, admin *services.AdminService, audit *services.AuditService, health *services.HealthService, apps *services.AppService, deployments *services.DeploymentService) http.Handler {
+func NewRouter(logger *slog.Logger, devAuth bool, repository string, backend string, ingressHost string, auth *services.AuthService, apiKeys *services.APIKeyService, admin *services.AdminService, audit *services.AuditService, health *services.HealthService, apps *services.AppService, deployments *services.DeploymentService, reliability *services.ReliabilityService) http.Handler {
 	r := &Router{
 		logger:      logger,
 		auth:        auth,
@@ -33,6 +34,7 @@ func NewRouter(logger *slog.Logger, devAuth bool, repository string, backend str
 		health:      health,
 		apps:        apps,
 		deployments: deployments,
+		reliability: reliability,
 		devAuth:     devAuth,
 		repository:  repository,
 		backend:     backend,
@@ -62,6 +64,10 @@ func NewRouter(logger *slog.Logger, devAuth bool, repository string, backend str
 	mux.HandleFunc("/v1/admin/summary", r.withMiddleware(r.withActor(r.handleAdminSummary)))
 	mux.HandleFunc("/v1/admin/backends", r.withMiddleware(r.withActor(r.handleAdminBackends)))
 	mux.HandleFunc("/v1/admin/preflight", r.withMiddleware(r.withActor(r.handleAdminPreflight)))
+	mux.HandleFunc("/v1/admin/reliability", r.withMiddleware(r.withActor(r.handleAdminReliability)))
+	mux.HandleFunc("/v1/admin/reconcile", r.withMiddleware(r.withActor(r.handleAdminReconcile)))
+	mux.HandleFunc("/v1/admin/dead-letters", r.withMiddleware(r.withActor(r.handleAdminDeadLetters)))
+	mux.HandleFunc("/v1/admin/dead-letters/", r.withMiddleware(r.withActor(r.handleAdminDeadLetterRoutes)))
 	mux.HandleFunc("/v1/admin/audit-logs", r.withMiddleware(r.withActor(r.handleAuditLogs)))
 	mux.HandleFunc("/v1/admin/users", r.withMiddleware(r.withActor(r.handleAdminUsers)))
 	mux.HandleFunc("/v1/admin/openclaw/deploy", r.withMiddleware(r.withActor(r.handleAdminOpenClawDeploy)))
