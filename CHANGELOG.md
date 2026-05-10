@@ -2,6 +2,48 @@
 
 ---
 
+## v0.2.0 — Reliability Control Plane
+
+> **May 10, 2026** — Production reliability primitives for OpenClaw deployments.
+
+This release makes Clawflux a reliability control plane instead of only a deployment runner. Jobs are now leased, retried with delayed backoff, reclaimed after worker crashes, and dead-lettered with replay support. Active deployments are continuously reconciled from durable desired state, and the admin UI now exposes queue health and recovery actions.
+
+### What's in this release
+
+#### Reliable job processing
+
+- **Processing leases** — workers move Redis jobs into a processing queue and acknowledge them only after successful handling.
+- **Delayed retries** — failed jobs retry with exponential backoff without blocking worker capacity.
+- **Stale lease reclaim** — jobs left in processing after worker crashes are recovered automatically.
+- **Dead-letter queue** — exhausted jobs are retained with error context and can be replayed.
+- **Queue stats** — ready, processing, delayed, and dead-letter counts are exposed through the admin API.
+
+#### Deployment reconciliation and repair
+
+- **Continuous reconciler** — worker-side loop re-schedules create, sync, and delete work for active deployments.
+- **Recovering/degraded states** — deployments can now distinguish partial availability and repair progress from hard failure.
+- **Auto-repair policy** — app config can limit automatic repair attempts before marking a deployment failed.
+- **Health probes** — optional HTTP readiness/liveness probe configuration for OpenClaw deployments.
+- **Fallback provider config** — OpenClaw deployments can receive fallback inference provider metadata through environment injection.
+
+#### Operator experience
+
+- **Reliability dashboard** — admin UI shows queue pressure, dead-letter jobs, replay controls, and manual reconciliation.
+- **New admin endpoints**:
+  - `GET /v1/admin/reliability`
+  - `POST /v1/admin/reconcile`
+  - `GET /v1/admin/dead-letters`
+  - `POST /v1/admin/dead-letters/{id}/replay`
+- **Local demo mode** — `REDIS_ADDR=memory` runs an in-memory queue with an embedded API worker/reconciler for development without Redis.
+
+### Operational notes
+
+- Run migration `0005_reliability.sql` before deploying this version against Postgres.
+- `RECONCILE_INTERVAL` controls the worker reconciliation cadence and defaults to `30s`.
+- `REDIS_ADDR=memory` is not durable and should only be used for local demos.
+
+---
+
 ## v0.1.0 — Initial Public Release
 
 > **April 12, 2026** — First public release of Clawflux.
